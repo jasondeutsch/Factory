@@ -42,6 +42,7 @@ type UpdateTaskInput struct {
 }
 
 type Message struct {
+	AssignmentID   string  `json:"assignment_id,omitempty"`
 	ID             string  `json:"id"`
 	TaskID         string  `json:"task_id"`
 	Sender         string  `json:"sender"`
@@ -53,12 +54,13 @@ type Message struct {
 }
 
 type SendMessageInput struct {
-	TaskID     string `json:"task_id"`
-	Sender     string `json:"sender"`
-	Recipient  string `json:"recipient"`
-	Kind       string `json:"kind" jsonschema:"assignment, question, answer, progress, finding, result, or decision"`
-	Text       string `json:"text"`
-	RequestKey string `json:"request_key,omitempty" jsonschema:"Stable retry key unique for this sender and task"`
+	AssignmentID string `json:"assignment_id,omitempty" jsonschema:"Optional existing assignment in this task; does not change its state"`
+	TaskID       string `json:"task_id"`
+	Sender       string `json:"sender"`
+	Recipient    string `json:"recipient"`
+	Kind         string `json:"kind" jsonschema:"assignment, question, answer, progress, finding, result, or decision"`
+	Text         string `json:"text"`
+	RequestKey   string `json:"request_key,omitempty" jsonschema:"Stable retry key unique for this sender and task"`
 }
 
 type InboxInput struct {

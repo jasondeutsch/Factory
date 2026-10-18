@@ -56,13 +56,33 @@ func Open(path string) (*Store, error) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return failed(err)
 	}
-	if version > 1 {
-		return failed(fmt.Errorf("database schema %d is newer than supported schema 1", version))
+	if version > 2 {
+		return failed(fmt.Errorf("database schema %d is newer than supported schema 2", version))
 	}
-	if _, err := db.ExecContext(ctx, schema); err != nil {
-		return failed(fmt.Errorf("initialize database: %w", err))
+	if err := initializeSchema(ctx, db, version); err != nil {
+		return failed(err)
 	}
 	return &Store{db: db}, nil
+}
+
+func initializeSchema(ctx context.Context, db *sql.DB, version int) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, schema); err != nil {
+		return fmt.Errorf("initialize database: %w", err)
+	}
+	if version < 2 {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE messages ADD COLUMN assignment_id TEXT REFERENCES assignments(id)"); err != nil {
+			return fmt.Errorf("upgrade messages: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=2"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) Close() error                   { return s.db.Close() }
@@ -102,7 +122,7 @@ func pageLimit(value, fallback, maximum int) (int, error) {
 }
 
 const taskColumns = "sequence,id,project,name,brief,owner,status,summary,version,created_at,updated_at"
-const messageColumns = "id,task_id,sender,recipient,kind,text,created_at,acknowledged_at"
+const messageColumns = "id,task_id,sender,recipient,kind,text,created_at,acknowledged_at,assignment_id"
 const eventColumns = "sequence,task_id,actor,kind,stage,attempt,message,data,created_at"
 
 type scanner interface{ Scan(...any) error }
@@ -117,7 +137,9 @@ func scanTask(row scanner) (Task, error) {
 }
 func scanMessage(row scanner) (Message, error) {
 	var message Message
-	err := row.Scan(&message.ID, &message.TaskID, &message.Sender, &message.Recipient, &message.Kind, &message.Text, &message.CreatedAt, &message.AcknowledgedAt)
+	var assignmentID sql.NullString
+	err := row.Scan(&message.ID, &message.TaskID, &message.Sender, &message.Recipient, &message.Kind, &message.Text, &message.CreatedAt, &message.AcknowledgedAt, &assignmentID)
+	message.AssignmentID = assignmentID.String
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errMessageNotFound
 	}
@@ -257,7 +279,7 @@ func (s *Store) SendMessage(ctx context.Context, input SendMessageInput) (Messag
 	if input.RequestKey != "" {
 		message, err := scanMessage(tx.QueryRowContext(ctx, "SELECT "+messageColumns+" FROM messages WHERE task_id=? AND sender=? AND request_key=?", input.TaskID, input.Sender, input.RequestKey))
 		if err == nil {
-			if message.Recipient != input.Recipient || message.Kind != input.Kind || message.Text != input.Text {
+			if message.Recipient != input.Recipient || message.Kind != input.Kind || message.Text != input.Text || message.AssignmentID != input.AssignmentID {
 				return Message{}, errors.New("request_key was already used for a different message")
 			}
 			return message, nil
@@ -266,8 +288,14 @@ func (s *Store) SendMessage(ctx context.Context, input SendMessageInput) (Messag
 			return Message{}, err
 		}
 	}
+	if input.AssignmentID != "" {
+		if _, err := assignmentRecord(ctx, tx, input.TaskID, input.AssignmentID); err != nil {
+			return Message{}, err
+		}
+	}
+
 	id := newID()
-	_, err = tx.ExecContext(ctx, "INSERT INTO messages(id,task_id,sender,recipient,kind,text,created_at,request_key) VALUES(?,?,?,?,?,?,?,NULLIF(?,''))", id, input.TaskID, input.Sender, input.Recipient, input.Kind, input.Text, now(), input.RequestKey)
+	_, err = tx.ExecContext(ctx, "INSERT INTO messages(id,task_id,sender,recipient,kind,text,created_at,request_key,assignment_id) VALUES(?,?,?,?,?,?,?,NULLIF(?,''),NULLIF(?,''))", id, input.TaskID, input.Sender, input.Recipient, input.Kind, input.Text, now(), input.RequestKey, input.AssignmentID)
 	if err != nil {
 		return Message{}, fmt.Errorf("save message (task must exist): %w", err)
 	}

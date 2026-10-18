@@ -1,63 +1,31 @@
-# Message conventions
+# Assignments and peer messages
 
-These are working conventions over the existing MCP API, not server-enforced fields, assignment states, or new tools. `send_message.text` remains a string; serialize the body below as JSON with available structured tools rather than interpolating arbitrary text into shell code. Keep human-readable `summary` text. Link large documents instead of embedding them.
+Use canonical comms tools for assignment ownership and lifecycle. Read [the coordination reference](../../../coordination.md) for input examples, allowed transitions, replacement, pagination, and retry semantics. JSON inside message text is conversation data, not an alternative assignment record.
 
-## Assignment
+## Register and discover
 
-The coordinator chooses a stable `assignment_id`, unique within this task, before sending. Use the same ID for its subsequent acceptance, progress, questions, and result. A retry of the same message uses the same `request_key` and content; each genuinely new update needs a new key.
+Establish task/project, role, instance ID, and routing identity from the orchestrator or host context. Factory launchers provide `FACTORY_INSTANCE_ID`; other runners provide an equivalent stable identity. On a fresh context, look up the matching instance through `list_participants` first. Register once per task/instance with `register_participant` and a stable request key when no matching registration exists. Retain the returned participant ID across turns and context resets. The owner's routing identity must match the task's owner.
 
-Example body for `kind: assignment`:
+Read `list_participants` pages for assigned contacts. Distinguish role, routing identity, participant ID, and optional actual host reference. Retired registrations are historical; registration is not live availability or authentication. Ask the orchestrator about unknown/unreachable peers. Multiple instances of a role need distinct active inbox identities.
 
-```json
-{
-  "assignment_id": "build-01",
-  "summary": "Implement the approved command-line game.",
-  "scope": "Only the approved plan items; no web UI.",
-  "artifact_dir": "/explicit/project/.factory/tasks/selected-task",
-  "inputs": ["spec.html", "plan.html"],
-  "expected_output": ["application source", "tests", "reviews/build-01.md"],
-  "stage": "build",
-  "attempt": 1,
-  "peers": [{"recipient": "code_reviewer_golang", "role": "code reviewer"}],
-  "next_action": "Submit for independent code review."
-}
-```
+Replacement is explicit via `replaces_participant_id`, using a new instance ID with the same role and routing identity. It retires the old registration without inheriting its assignments. The orchestrator cancels obsolete assignments and creates follow-up work deliberately. Do not bypass instance checks by impersonating a previous worker.
 
-The envelope still has the real `task_id`, `sender`, `recipient`, and `kind`. Do not put protocol fields at the API's top level. Include the project root separately when the artifact location does not establish it clearly. State prerequisites and approval requirements in the assignment. A peer list identifies assigned contacts, not proof that their sessions are running.
+## Canonical assignment operations
 
-## Responses
+The task owner calls `create_assignment` with the assigning participant ID, assignee ID, instructions, inputs, expected output, stage/attempt, and stable request key. Save its returned assignment ID/version. The service atomically creates the inbox message and event; do not manually duplicate either.
 
-Use `assignment_id`, `in_reply_to` (the original or most relevant message ID), `status`, and `summary` in response bodies. Add details relevant to the action:
+The recipient reads its inbox, acknowledges reading using its **routing identity**, and fetches `get_assignment`. Then use `update_assignment` with its **participant ID** to accept or decline. Acknowledgement alone is not acceptance. Only accepted work can advance to working, blocked, needs_input, or a submitted result.
 
-| Meaning | Existing message kind | Body status | Useful fields |
-| --- | --- | --- | --- |
-| Accepted | `answer` | `accepted` | Confirm understood scope and prerequisites. |
-| Declined | `answer` | `declined` | `reason`, `next_action`. |
-| Meaningful progress | `progress` | `working` | Completed item IDs, evidence, remaining work. |
-| Blocked | `progress` | `blocked` | Actual error, attempted action, `needed_from`, `next_action`. |
-| Needs an answer | `question` | `needs_input` | Concrete question, `needed_from`, paused scope. |
-| Review finding | `finding` | `changes_requested` | Finding IDs, evidence, affected scope. |
-| Result | `result` | `ready_for_review` or `completed` | Artifacts, checks, limitations, next action. |
+Report meaningful progress/blockers through `update_assignment` with a fresh expected version, explanatory summary, and new request key. The orchestrator receives the generated notification. When waiting, name the needed input and responsible participant in the summary; send a concrete question through `send_message` when needed. Do not consume turns with empty-inbox polling.
 
-A `completed` assignment is not overall task completion or human approval. An acceptance message does not replace `acknowledge_message`. Acknowledging delivery does not establish acceptance. Semantic status in message text does not automatically change server task status or create report stage events.
+Send the final handoff using `submit_result`: outcome (`ready_for_review`, `completed`, or `failed`), summary, actual artifact/check references, limitations, and next action. It atomically notifies the orchestrator. Submitted results do not approve themselves, complete the task, or start another agent. The orchestrator decides subsequent assignments.
 
-Example result body:
+Use `list_assignments` with state/assignee filters when recovering outstanding work. Reuse the original request key and payload after an uncertain response. A replay returns the original response, which can be older than current state; fetch before a new action. Never restart work merely because a message was delivered again. Terminal assignments require an explicit new assignment for further work.
 
-```json
-{
-  "assignment_id": "build-01",
-  "in_reply_to": "<actual assignment message ID>",
-  "status": "ready_for_review",
-  "summary": "Approved implementation is ready for independent review.",
-  "artifacts": ["reviews/build-01.md", "progress.md"],
-  "checks": [{"command": "go test ./...", "exit_status": 0}],
-  "limitations": ["gopls was unavailable and was not exercised."],
-  "next_action": "Assign the code reviewer."
-}
-```
+## Peer conversation and evidence
 
-Only report checks that actually ran. Also publish relevant `record_event` evidence with stage and attempt so report timelines can use it. Ask the owner for missing assignment context; do not invent approval, availability, or verification.
+Use `send_message` for questions, answers, review findings, direct human feedback, and conversational context. Include `assignment_id` at the tool's top level when applicable; the server validates it belongs to the task. The message kinds remain `assignment`, `question`, `answer`, `progress`, `finding`, `result`, and `decision`, but generic messages do **not** create or transition canonical assignments.
 
-## Recovery and routing
+Message text can be plain prose. State the question/finding, source evidence, relevant artifact, and requested action. Address known routing identities and summarize consequential peer exchanges to the orchestrator. Serialize text safely through structured tools; never interpolate arbitrary message content into shell code.
 
-Inspect earlier messages, results, and decisions before repeating work. Retain assignment correlation across context resets and fresh sessions. Duplicate notification is a prompt to inspect the existing record, not a new assignment. Direct peer messages must use known task participants and retain task/assignment context. If a peer is unknown or unreachable, route the question through the coordinator and state what is waiting.
+Assignment operations already record lifecycle events. Use `record_event` for additional checks, failures, artifact decisions, and other evidence; use `record_usage` for actual measurements. Approval decisions still require their documented event shape and exact hashes. A decision message alone is not approval evidence.

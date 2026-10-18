@@ -27,7 +27,7 @@ func TestHTTPMCPRoundTripAndReport(t *testing.T) {
 	t.Cleanup(func() { session.Close() })
 	tools, err := session.ListTools(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, tools.Tools, 12)
+	require.Len(t, tools.Tools, 19)
 	call := func(name string, input, output any) {
 		t.Helper()
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: input})
@@ -59,6 +59,28 @@ func TestHTTPMCPRoundTripAndReport(t *testing.T) {
 	call("get_task_report", TaskInput{TaskID: task.ID}, &report)
 	require.NotNil(t, report.Usage.TotalTokens)
 	assert.EqualValues(t, 12, *report.Usage.TotalTokens)
+	// Exercise every coordination operation through actual MCP schemas/HTTP.
+	var owner, worker Participant
+	call("register_participant", RegisterParticipantInput{TaskID: task.ID, InstanceID: "owner-instance", Role: "orchestrator", RoutingIdentity: task.Owner, RequestKey: "register-owner"}, &owner)
+	call("register_participant", RegisterParticipantInput{TaskID: task.ID, InstanceID: "worker-instance", Role: "coder", RoutingIdentity: "worker", RequestKey: "register-worker"}, &worker)
+	var roster participantList
+	call("list_participants", ListParticipantsInput{TaskID: task.ID}, &roster)
+	require.Len(t, roster.Participants, 2)
+	// Explicitly reopen the task; the service does not assign work on terminal tasks.
+	call("update_task", UpdateTaskInput{TaskID: task.ID, Actor: task.Owner, ExpectedVersion: task.Version, Status: "working", Summary: "Coordination fixture"}, &task)
+	var assignment Assignment
+	call("create_assignment", CreateAssignmentInput{TaskID: task.ID, AssigningParticipant: owner.ID, Assignee: worker.ID, Title: "One assignment", Instructions: "Report evidence", ExpectedOutput: []string{"result"}, Stage: "coordination", Attempt: 1, RequestKey: "assignment-http"}, &assignment)
+	call("get_assignment", AssignmentInput{TaskID: task.ID, AssignmentID: assignment.ID}, &assignment)
+	var listed assignmentList
+	call("list_assignments", ListAssignmentsInput{TaskID: task.ID, State: "offered", Assignee: worker.ID}, &listed)
+	require.Len(t, listed.Assignments, 1)
+	call("update_assignment", UpdateAssignmentInput{TaskID: task.ID, AssignmentID: assignment.ID, Actor: worker.ID, ExpectedVersion: assignment.Version, State: "accepted", Summary: "Accepted", RequestKey: "accept-http"}, &assignment)
+	call("submit_result", SubmitResultInput{TaskID: task.ID, AssignmentID: assignment.ID, Actor: worker.ID, ExpectedVersion: assignment.Version, RequestKey: "result-http", Result: AssignmentResult{Outcome: "ready_for_review", Summary: "Ready", Artifacts: []string{"review.html"}, Checks: []CheckEvidence{{Command: "fixture check", ExitStatus: 0}}, NextAction: "Review the evidence"}}, &assignment)
+	assert.Equal(t, "submitted", assignment.State)
+	call("get_task_report", TaskInput{TaskID: task.ID}, &report)
+	assert.Equal(t, 1, report.AssignmentCounts["submitted"])
+	assert.Equal(t, "working", report.Task.Status)
+
 	var rendered renderedReport
 	call("render_report", TaskInput{TaskID: task.ID}, &rendered)
 	assert.Contains(t, rendered.HTML, "&lt;script&gt;")

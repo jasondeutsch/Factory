@@ -1,6 +1,6 @@
 # Task records and recovery
 
-[Comms](../comms/README.md) is the authoritative store for task metadata, status, inbox messages, acknowledgements, decisions, events, and usage. Agents share its [task-comms skill](../comms/skills/task-comms/SKILL.md). The coordinator owns the Go task's status; `pair_writer` owns a writing task. Documents and application code remain local.
+[Comms](../comms/README.md) is the authoritative store for task metadata, status, participants, assignments, inbox messages, acknowledgements, decisions, events, and usage. Agents share its [task-comms skill](../comms/skills/task-comms/SKILL.md). The coordinator owns the Go task's status; `pair_writer` owns a writing task. Documents and application code remain local.
 
 ## Storage boundaries
 
@@ -32,6 +32,12 @@ There are no local status, mailbox, acknowledgement, or event files for new task
 Task names may contain spaces and uppercase letters; only the directory slug is normalized. Millisecond timestamps order local directories, with a suffix on collision. Service IDs are distinct and include randomness. Each session receives both identities explicitly. There is no shared current-task pointer or implicit newest-task selection.
 
 Go tasks scaffold draft `spec.html` and `plan.html`, not finished requirements. The spec defines behavior and acceptance criteria; the plan defines approach, stable item IDs, dependencies, and verification. Execution belongs in `progress.md` and comms events, not edits to approved plans. Writing tasks choose their format and have no mandatory spec/plan.
+
+## Assignment records
+
+Each task has registered participant instances and canonical assignments in comms. Roles can repeat, active inbox routing identities cannot. `list_participants` provides registration/retirement facts, not heartbeat presence. The launcher supplies `FACTORY_INSTANCE_ID` so a fresh model context can recover the same process identity.
+
+The owner creates assignments. Reading acknowledgement is separate from explicit acceptance; assignees report working, blocked, or needs_input and submit structured results. The service saves each assignment mutation, notification, and event atomically. A submitted result is not review, approval, or task completion. Use the [coordination reference](../comms/coordination.md) for versions, retries, filters, and explicit instance replacement. Replacement preserves prior evidence and does not inherit assignments.
 
 ## Messages, decisions, and status
 

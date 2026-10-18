@@ -84,7 +84,9 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         if not path.is_relative_to(ROOT):
             raise ValueError(f"skill must be inside the portable toolbox: {value}")
         skill_files.append(path / "SKILL.md" if path.is_dir() else path)
-    context = f"Role: {role}\nProject root: {project}\n"
+    project_key = hashlib.sha256(str(project).encode()).hexdigest()[:16]
+    session = runtime / project_key / (task.name if task else "unassigned") / role / uuid.uuid4().hex
+    context = f"Role: {role}\nProject root: {project}\nInstance ID: {session.name}\n"
     recipe_text = ""
     if task is not None:
         recipe = ROOT / "factories" / (metadata["factory"] + ".md")
@@ -131,6 +133,7 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         child_env["FACTORY_TASK_ID"] = metadata["comms_id"]
         child_env["FACTORY_TASK_DIR"] = str(task)
     child_env["FACTORY_ROLE"] = role
+    child_env["FACTORY_INSTANCE_ID"] = session.name
     for child_name, source_name in mapping.items():
         if not isinstance(child_name, str) or not isinstance(source_name, str) or not source_name:
             raise ValueError("env names and references must be nonempty strings")
@@ -139,8 +142,6 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         if child_name == "PI_CODING_AGENT_DIR" or child_name.startswith("FACTORY_") or child_name == "COMMS_AUTH_TOKEN":
             raise ValueError("session identity and comms variables are managed by the launcher; set the shared comms environment before launch")
         child_env[child_name] = os.environ[source_name]
-    project_key = hashlib.sha256(str(project).encode()).hexdigest()[:16]
-    session = runtime / project_key / (task.name if task else "unassigned") / role / uuid.uuid4().hex
     instruction_file = session / "instructions.md"
     runner = config.get("runner", "pi")
     profile = None
@@ -173,8 +174,8 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
             # A native Pi command, not shell code or a nested agent process.
             initial_prompt = (
                 f"/ralph-loop --max-iterations={loop_iterations} Follow the loaded bounded-iteration skill. Task directory: {task}. "
-                f"Project root: {project}. Read your coder role instructions, the current assignment "
-                "in comms messages, get_task, read_inbox, list_events approvals, local spec.html and plan.html, and progress.md "
+                f"Project root: {project}. Read your coder role instructions, the canonical assignment "
+                "through get_assignment, get_task, read_inbox, list_events approvals, local spec.html and plan.html, and progress.md "
                 "at every iteration. Without an active coordinator assignment or unchanged current "
                 "approvals, report the blocker and end with <promise>STOP</promise>. "
                 "Implement one dependency-ready plan item, verify it, append progress, and notify the "

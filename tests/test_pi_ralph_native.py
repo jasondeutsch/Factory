@@ -33,6 +33,7 @@ class NativeRalphTest(unittest.TestCase):
     def test_fresh_iterations_keep_role_skills_mcp_and_private_sessions(self):
         requests = []
         task_identity = {}
+        assignment_context = {}
 
         class ModelFixture(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -42,9 +43,24 @@ class NativeRalphTest(unittest.TestCase):
                 requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
                 number = len(requests)
                 if number in (1, 3):
+                    identity = {"task_id": task_identity["id"], "assignment_id": assignment_context["id"]}
+                    code = "text(await tools.mcp__fixture__inspect_fixture({})); "
+                    code += "text(await tools.mcp__comms__get_assignment(" + json.dumps(identity) + ")); "
+                    if number == 1:
+                        for state, version in (("accepted", 1), ("working", 2)):
+                            arguments = {**identity, "actor_participant_id": assignment_context["worker"],
+                                         "expected_version": version, "state": state,
+                                         "summary": "Fixture " + state, "request_key": "fixture-" + state}
+                            code += "text(await tools.mcp__comms__update_assignment(" + json.dumps(arguments) + ")); "
+                    else:
+                        arguments = {**identity, "actor_participant_id": assignment_context["worker"],
+                                     "expected_version": 3, "request_key": "fixture-result",
+                                     "result": {"outcome": "ready_for_review", "summary": "Two native iterations exercised",
+                                                "next_action": "Inspect fixture evidence"}}
+                        code += "text(await tools.mcp__comms__submit_result(" + json.dumps(arguments) + ")); "
+                    code += "text(await tools.mcp__comms__record_event(" + json.dumps({"task_id": task_identity["id"], "actor": "coder_golang", "kind": "progress", "stage": "build", "attempt": 1, "message": f"Fixture iteration {number}", "request_key": f"fixture-iteration-{number}"}) + "));"
                     delta = {"role": "assistant", "tool_calls": [{"index": 0, "id": f"call-{number}", "type": "function",
-                             "function": {"name": "codemode", "arguments": json.dumps({"code": "text(await tools.mcp__fixture__inspect_fixture({})); " +
-                                 "text(await tools.mcp__comms__record_event(" + json.dumps({"task_id": task_identity["id"], "actor": "coder_golang", "kind": "progress", "stage": "build", "attempt": 1, "message": f"Fixture iteration {number}", "request_key": f"fixture-iteration-{number}"}) + "));"})}}]}
+                             "function": {"name": "codemode", "arguments": json.dumps({"code": code})}}]}
                     reason = "tool_calls"
                 else:
                     tag = "NEXT" if number == 2 else "COMPLETE"
@@ -121,14 +137,20 @@ class NativeRalphTest(unittest.TestCase):
             task_identity["id"] = json.loads((task / "task.json").read_text())["comms_id"]
             run("scripts/task.py", "decide", task, "--by", "human", "--outcome", "approve", "--artifact", "spec.html",
                 "--artifact", "plan.html", "--text", "Fixture approval, not real implementation.")
-            run("scripts/task.py", "send", task, "--from", "coordinator", "--to", "coder_golang", "--kind", "assignment",
-                "--text", "Exercise the local transition fixture only.")
             checked = json.loads(run("orchestrator/session.py", "coder_golang", task, "--loop", "2", "--check"))
             self.assertIn("ralph-loop", checked["commands"])
             self.assertEqual(requests, [])  # Preflight did not call a model.
             planned = json.loads(run("orchestrator/session.py", "coder_golang", task, "--loop", "2", "--dry-run"))
             session = Path(checked["report"]).parent
             env["PI_CODING_AGENT_DIR"] = str(session / "pi")
+            env["FACTORY_INSTANCE_ID"] = session.name
+            sys.path.insert(0, str(toolbox / "comms"))
+            from client import Client
+            coordination = Client(env)
+            owner = coordination.call("register_participant", task_id=task_identity["id"], instance_id="fixture-owner", role="coordinator", routing_identity="coordinator", request_key="owner")
+            worker = coordination.call("register_participant", task_id=task_identity["id"], instance_id=session.name, role="coder_golang", routing_identity="coder_golang", request_key="worker")
+            assignment = coordination.call("create_assignment", task_id=task_identity["id"], assigning_participant_id=owner["id"], assignee_id=worker["id"], title="Native coordination fixture", instructions="Exercise two fresh iterations only", expected_output=["fixture result"], stage="build", attempt=1, request_key="assignment")
+            assignment_context.update(id=assignment["id"], worker=worker["id"])
             command = [pi, "--mode", "rpc", "--no-skills", "--no-approve", "--append-system-prompt", str(session / "instructions.md"),
                        "--session", str(session / "session.jsonl")]
             with open(session / "fixture-rpc.log", "w+") as output:
@@ -170,6 +192,10 @@ class NativeRalphTest(unittest.TestCase):
                     events = list(Client(env).events(task_identity["id"]))
                     progress = [entry for entry in events if entry["kind"] == "progress"]
                     self.assertEqual([entry["message"] for entry in progress], ["Fixture iteration 1", "Fixture iteration 3"])
+                    submitted = coordination.call("get_assignment", task_id=task_identity["id"], assignment_id=assignment_context["id"])
+                    self.assertEqual(submitted["state"], "submitted")
+                    self.assertEqual(submitted["assignee_id"], worker["id"])
+                    self.assertEqual(submitted["result"]["outcome"], "ready_for_review")
                     self.assertFalse((project / ".git").exists())
                     self.assertEqual(json.loads((native / "settings.json").read_text()), settings)
                 finally:

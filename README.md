@@ -56,7 +56,7 @@ In your existing agent session:
 
 > Read `.factory/orchestrator/SKILL.md`. Use the Go development factory to start a task: reduce repeated account database reads without changing API behavior. Coordinate the agents in visible Herdr panes. Bring the spec and plan back to me for approval before implementation.
 
-The coordinator creates the task, loads the recipe, and assigns work to the appropriate role sessions. It can use existing sessions or open new visible panes as requested. You do not need to start another coordinator or run task lifecycle commands yourself.
+The coordinator creates the task, loads the recipe, registers the participating instances, and creates explicit assignments for the appropriate role sessions. Workers accept or decline, report progress/blockers, and submit results through comms; the coordinator decides the next action. It can use existing sessions or open new visible panes as requested. You do not need to start another coordinator or run task lifecycle commands yourself.
 
 Names can contain uppercase letters and spaces. The agent can take a long brief directly from your conversation or read a file you provide. It should present questions and approval requests in your conversation, linking the relevant documents.
 
@@ -82,7 +82,7 @@ Your current agent can act as the pair writer, load its writing skills, and main
 
 The coordinator inspects the recorded state, handles messages, records your decisions, and explains the next action. It should not hand you helper commands for routine coordination. You can also enter a worker's pane and give feedback directly; that worker reports material changes back to the coordinator.
 
-Messages are saved in the comms task inbox. Agents check at turn boundaries and can notify peers through Herdr. The mailbox alone does not wake idle sessions, and there is no background dispatcher. When notification is unavailable, the coordinator should explain the limitation and request the smallest necessary human action, such as asking a worker to check its inbox.
+Messages are saved in the comms task inbox. Agents check at turn boundaries and can notify peers through Herdr. Participant registration does not prove live availability. Assignment changes atomically save their inbox notifications and evidence; reading acknowledgement, acceptance, and result submission remain distinct. The mailbox alone does not wake idle sessions, and there is no background dispatcher. When notification is unavailable, the coordinator should explain the limitation and request the smallest necessary human action, such as asking a worker to check its inbox.
 
 ## What to customize
 
@@ -121,6 +121,7 @@ Reviewers must not change application source. This is an instruction boundary, *
 | Guide | Use it for |
 | --- | --- |
 | [Tools and tradeoffs](docs/tools.md) | External dependencies, included helpers, skills, communication, and operational limits. |
+| [Participants and assignments](comms/coordination.md) | MCP registration, assignment lifecycle, ownership, results, retries, and recovery. |
 | [Comms service](comms/README.md) | Docker Compose, optional storage volumes, agent MCP connections, task/message tools, and reports. |
 | [Setup and troubleshooting](docs/troubleshooting.md) | Prerequisites, corporate-network configuration, failures, updates, and maintainer verification. |
 | [Task records and recovery](docs/task-records.md) | Artifacts, decisions, status, resume, retention, and project boundaries. |

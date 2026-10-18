@@ -38,11 +38,17 @@ For approved Go implementation, record an assignment with stage and positive att
 
 ## Dispatch and report through MCP
 
-Use `send_message`, `read_inbox`, and `acknowledge_message` for handoffs. Include the task ID, role identities, assignment scope, artifact directory, expected output, stage, and attempt. Send peer exchanges and direct human feedback back to the coordinator. Saved messages do not wake agents. After saving, notify the actual live Herdr session using available controls. A notification failure must not duplicate the saved assignment.
+Register the owner and task workers with `register_participant`, using actual stable instance IDs and distinct active inbox identities. The owner's routing identity must equal the task's `owner`. Use `list_participants` to discover IDs; registration is not live availability. Find an existing matching instance registration after a context reset instead of inventing another instance.
+
+Use `create_assignment` with registered participant IDs, instructions, inputs, expected output, stage, attempt, and a stable request key. Retain its canonical ID. The service atomically creates its inbox notification and event. Workers acknowledge reading separately, accept/decline through `update_assignment`, report progress/blockers with versions, and hand off through `submit_result`. These writes notify the other participant atomically; do not manually duplicate them as ordinary messages or lifecycle events.
+
+Use `get_assignment` and paginated `list_assignments` filters to inspect actual outstanding work. Stale versions require reconciliation, not blind overwrites. The orchestrator explicitly chooses follow-up review or repair assignments; submission never approves itself or completes the task. See [the coordination reference](../../comms/coordination.md) for argument examples, allowed transitions, retries, and replacement.
+
+Use `send_message` with optional `assignment_id` for questions, findings, peer exchanges, and direct human feedback. Read/acknowledge inbox messages using routing identity. Stored notifications do not wake agents. After storage, notify the actual live Herdr session through available controls. Notification failure must not duplicate an assignment.
 
 Use `get_task` then `update_task` with `expected_version` for owner status changes. Record stage starts, completions, checks, failures, session mapping, and scoped delegation using `record_event`. Read paginated history on recovery. Present `get_task_report` metrics and the full report URL, including missing usage coverage. A stopped process or idle pane is not evidence of completion.
 
-The shell helper's `status`, `send`, `inbox`, `ack`, `note`, and `decide` operations call the same MCP service. They exist for deterministic operations and shell-only clients, not a second required lifecycle. `send --notify <live-name>` saves first and then attempts Herdr notification. Stable `--request-key` is available for message/task retries after an uncertain response. Preserve the original key and payload; do not blindly repeat a write with a new identity.
+The shell helper's `send --kind assignment` remains a generic message and does not create structured ownership; use `create_assignment` for work. Its `status`, `send`, `inbox`, `ack`, `note`, and `decide` operations call the same MCP service. They exist for deterministic operations and shell-only clients, not a second required lifecycle. `send --notify <live-name>` saves first and then attempts Herdr notification. Stable `--request-key` is available for message/task retries after an uncertain response. Preserve the original key and payload; do not blindly repeat a write with a new identity.
 
 ## Record an actual conversational decision
 

@@ -80,6 +80,12 @@ type StageSummary struct {
 }
 
 type TaskReport struct {
+	FailedResults          int             `json:"failed_results"`
+	Participants           []Participant   `json:"participants"`
+	ParticipantCount       int             `json:"participant_count"`
+	Assignments            []Assignment    `json:"assignments"`
+	AssignmentCount        int             `json:"assignment_count"`
+	AssignmentCounts       map[string]int  `json:"assignment_counts"`
 	Task                   Task            `json:"task"`
 	GeneratedAt            string          `json:"generated_at"`
 	EventCounts            map[string]int  `json:"event_counts"`
@@ -95,7 +101,7 @@ type TaskReport struct {
 }
 
 func (s *Store) Report(ctx context.Context, id string) (TaskReport, error) {
-	report := TaskReport{GeneratedAt: now(), EventCounts: map[string]int{}, Stages: []*StageSummary{}, Events: []Event{}, Messages: []Message{}, ReportPath: "/tasks/" + url.PathEscape(id) + "/report.html"}
+	report := TaskReport{Participants: []Participant{}, Assignments: []Assignment{}, AssignmentCounts: map[string]int{}, GeneratedAt: now(), EventCounts: map[string]int{}, Stages: []*StageSummary{}, Events: []Event{}, Messages: []Message{}, ReportPath: "/tasks/" + url.PathEscape(id) + "/report.html"}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return report, err
@@ -127,8 +133,43 @@ func (s *Store) Report(ctx context.Context, id string) (TaskReport, error) {
 	if err := tx.QueryRowContext(ctx, "SELECT count(*),coalesce(sum(acknowledged_at IS NULL),0) FROM messages WHERE task_id=?", id).Scan(&report.MessageCount, &report.UnacknowledgedMessages); err != nil {
 		return report, err
 	}
+	report.Participants, err = participants(ctx, tx, ListParticipantsInput{TaskID: id, Limit: 200})
+	if err != nil {
+		return report, err
+	}
+	report.Assignments, err = assignments(ctx, tx, ListAssignmentsInput{TaskID: id, Limit: 200})
+	if err != nil {
+		return report, err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM participants WHERE task_id=?", id).Scan(&report.ParticipantCount); err != nil {
+		return report, err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM assignments WHERE task_id=? AND json_extract(result,'$.outcome')='failed'", id).Scan(&report.FailedResults); err != nil {
+		return report, err
+	}
+
+	states, err := tx.QueryContext(ctx, "SELECT state,count(*) FROM assignments WHERE task_id=? GROUP BY state", id)
+	if err != nil {
+		return report, err
+	}
+	for states.Next() {
+		var state string
+		var count int
+		if err := states.Scan(&state, &count); err != nil {
+			states.Close()
+			return report, err
+		}
+		report.AssignmentCounts[state] = count
+		report.AssignmentCount += count
+	}
+	err = states.Err()
+	states.Close()
+	if err != nil {
+		return report, err
+	}
+
 	stages := map[string]*StageSummary{}
-	rows, err := tx.QueryContext(ctx, "SELECT "+eventColumns+" FROM events WHERE task_id=? AND (kind='usage' OR (stage<>'' AND kind IN ('stage_started','stage_completed','failure'))) ORDER BY sequence", id)
+	rows, err := tx.QueryContext(ctx, "SELECT "+eventColumns+" FROM events WHERE task_id=? AND (kind='usage' OR (stage<>'' AND kind IN ('stage_started','stage_completed','failure','assignment_created','assignment_updated','assignment_submitted'))) ORDER BY sequence", id)
 	if err != nil {
 		return report, err
 	}
@@ -159,6 +200,16 @@ func (s *Store) Report(ctx context.Context, id string) (TaskReport, error) {
 			}
 			stage.Usage.add(usage)
 			report.Usage.add(usage)
+		case "assignment_created", "assignment_updated", "assignment_submitted":
+			if state, ok := event.Data["state"].(string); ok {
+				stage.Status = state
+				if state == "working" && stage.StartedAt == "" {
+					stage.StartedAt = event.CreatedAt
+				}
+				if oneOf(state, "submitted", "declined", "cancelled") {
+					stage.FinishedAt = event.CreatedAt
+				}
+			}
 		case "stage_started":
 			if stage.StartedAt == "" {
 				stage.StartedAt = event.CreatedAt
@@ -250,7 +301,7 @@ var reportTemplate = template.Must(template.New("report").Funcs(template.FuncMap
 		}
 		return fmt.Sprintf("%.2fs", *value)
 	},
-	"json": func(value map[string]any) string {
+	"json": func(value any) string {
 		encoded, err := json.MarshalIndent(value, "", "  ")
 		if err != nil {
 			return "Invalid evidence data"

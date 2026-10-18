@@ -6,15 +6,19 @@ This is an agent implementation reference. Users ask for implementation or give 
 
 The Go coder's native `pi/settings.json` declares [edxeth/pi-ralph-loop](https://github.com/edxeth/pi-ralph-loop), pinned to commit `108823f8d1e2089fec1f7202ca3a8905d12df574` (package version 1.3.3). Pi manages loading and installing this declared package in the private runtime profile. Git/network access is needed to obtain the plugin; application work does not require a Git repository. An already available local package can replace the source in a native settings overlay for offline use. Do not replace certificate validation to obtain it.
 
-Before starting, the coordinator records the actual approval of current `spec.html` and `plan.html`, sends the coder a durable assignment, and confirms no other agent owns source edits. Plan items have stable IDs and verification. Create or resume the task's `progress.md` with the assigned item IDs and any relevant prior work; do not create another spec or plan.
+Before starting, the coordinator records the actual approval of current `spec.html` and `plan.html`, registers the coder instance and creates its canonical comms assignment, and confirms no other agent owns source edits. Plan items have stable IDs and verification. Create or resume the task's `progress.md` with the assigned item IDs and any relevant prior work; do not create another spec or plan.
 
-Launch in the coder's visible pane, from the application root:
+For structured assignments, start the coder's ordinary visible session, let it register its actual instance, and create the assignment for that participant. After confirming the native Ralph commands are available in that session, submit the native loop command **to the same running coder**:
 
-```bash
-python3 .factory/orchestrator/session.py coder_golang <task-path> --loop 5
+```text
+/ralph-loop --max-iterations=5 Follow the loaded bounded-iteration skill for the explicit task and canonical assignment. Read get_task, get_assignment, inbox, approval events, spec.html, plan.html and progress.md each iteration. Accept offered work before implementing. Publish progress through update_assignment and hand off with submit_result. Stop on cancellation, changed approvals, blockers, or missing assignment. Use the skill's control tags.
 ```
 
-`--loop N` selects an explicit positive iteration cap. It is supported only for native Pi `coder_golang` sessions in the Go factory. The launcher checks the latest recorded artifact-specific decision for each current document hash; a later rejection or changed document prevents a new loop launch. It also asks a real Pi runtime to load extensions and report Ralph's commands before dispatching the loop, preventing a missing slash command from becoming an ordinary model prompt. This check sends no model prompt but can install the declared package and connect configured MCPs. A native startup failure records a task event with private diagnostics; earlier approval/configuration failures are reported on stderr. `--dry-run` creates no files or connections but still validates the requested loop and current approvals. `--check` performs checks without starting the loop.
+Supply the actual task/assignment IDs and artifact directory as part of that session's assignment context. The orchestrator sends this through supported live session controls, not by asking the human to operate lifecycle scripts. Do not submit a slash command as an ordinary prompt when the extension is unavailable.
+
+`start.sh <task-path> --loop N` remains a fresh-session bootstrap entrypoint with a positive iteration cap; it is not resume for an already registered worker. The launcher checks current document hashes/decisions and asks Pi to load extensions and confirm the Ralph commands before dispatch. `--dry-run` creates no files but reads comms approval events; `--check` checks startup without beginning model work.
+
+**A new launcher invocation creates a new instance ID.** Do not assign work to an earlier preflight/ordinary instance and assume a newly launched loop owns it. The first loop iteration must resolve registration and a canonical assignment for its actual instance; without one it reports the blocker and stops. Prefer starting the loop within the already assigned coder session. A native context reset inside that process retains `FACTORY_INSTANCE_ID`; a replacement process must use explicit participant replacement and orchestrator-directed cancellation/follow-up assignments.
 
 Pi starts in its normal interactive host and receives `/ralph-loop` as its initial native command. The repeated prompt points to this task's durable documents and assignment. The loaded role instructions and skills are supplied through `--append-system-prompt`; Pi reloads them, its native profile, and MCP configuration for replacement sessions. Fresh session transcripts remain under the same private session directory.
 

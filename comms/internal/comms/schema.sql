@@ -41,4 +41,47 @@ CREATE TABLE IF NOT EXISTS events (
  UNIQUE(task_id, actor, request_key)
 );
 CREATE INDEX IF NOT EXISTS events_task ON events(task_id, sequence);
-PRAGMA user_version = 1;
+CREATE TABLE IF NOT EXISTS participants (
+ id TEXT PRIMARY KEY,
+ task_id TEXT NOT NULL REFERENCES tasks(id),
+ instance_id TEXT NOT NULL,
+ role TEXT NOT NULL,
+ routing_identity TEXT NOT NULL,
+ session_ref TEXT NOT NULL,
+ registered_at TEXT NOT NULL,
+ retired_at TEXT,
+ UNIQUE(id, task_id),
+ UNIQUE(task_id, instance_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS participants_active_routing ON participants(task_id, routing_identity) WHERE retired_at IS NULL;
+CREATE TABLE IF NOT EXISTS assignments (
+ id TEXT PRIMARY KEY,
+ task_id TEXT NOT NULL REFERENCES tasks(id),
+ assigning_participant_id TEXT NOT NULL,
+ assignee_id TEXT NOT NULL,
+ title TEXT NOT NULL,
+ instructions TEXT NOT NULL,
+ inputs TEXT NOT NULL,
+ expected_output TEXT NOT NULL,
+ stage TEXT NOT NULL,
+ attempt INTEGER NOT NULL CHECK(attempt > 0),
+ state TEXT NOT NULL CHECK(state IN ('offered','accepted','working','blocked','needs_input','submitted','declined','cancelled')),
+ summary TEXT NOT NULL,
+ version INTEGER NOT NULL CHECK(version > 0),
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ result TEXT,
+ FOREIGN KEY(assigning_participant_id, task_id) REFERENCES participants(id, task_id),
+ FOREIGN KEY(assignee_id, task_id) REFERENCES participants(id, task_id)
+);
+CREATE INDEX IF NOT EXISTS assignments_task ON assignments(task_id, id);
+CREATE INDEX IF NOT EXISTS assignments_assignee ON assignments(task_id, assignee_id, state);
+CREATE TABLE IF NOT EXISTS coordination_requests (
+ task_id TEXT NOT NULL REFERENCES tasks(id),
+ actor_key TEXT NOT NULL,
+ request_key TEXT NOT NULL,
+ operation TEXT NOT NULL,
+ input TEXT NOT NULL,
+ output TEXT NOT NULL,
+ PRIMARY KEY(task_id, actor_key, request_key)
+);

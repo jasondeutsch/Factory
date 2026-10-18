@@ -1,6 +1,6 @@
 # Factory comms
 
-A small Go MCP server for shared task records, agent inboxes, structured evidence, and reports. It uses the official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) and the pure-Go [modernc SQLite driver](https://pkg.go.dev/modernc.org/sqlite). Its Go module lives in this directory.
+A small Go MCP server for shared task records, participants, assignments, agent inboxes, structured evidence, and reports. It uses the official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) and the pure-Go [modernc SQLite driver](https://pkg.go.dev/modernc.org/sqlite). Its Go module lives in this directory.
 
 SQLite is embedded in the comms process. It is not a database service, so the base Compose setup starts **one container**, containing the server and its SQLite dependency. The optional admin override adds a separate browser UI container. Agents connect over Streamable HTTP; they do not open the database file.
 
@@ -101,7 +101,7 @@ Every operation uses an explicit task ID; project identifiers are supplied strin
 | `list_tasks` | `project` | Newest first. Default 20, maximum 100. Use the last task's `sequence` as `before` for the next page. |
 | `get_task` | `task_id` | Current metadata, state, and version. |
 | `update_task` | `task_id`, `actor`, `expected_version`, `status`, `summary` | Updates status and appends an event atomically. Requires the declared owner and current version; stale updates fail. |
-| `send_message` | `task_id`, `sender`, `recipient`, `kind`, `text` | Stores the message and an event atomically. Optional `request_key` deduplicates retries. Does not wake the recipient. |
+| `send_message` | `task_id`, `sender`, `recipient`, `kind`, `text` | Stores conversation and an event atomically. Optional `request_key` deduplicates retries; optional `assignment_id` links an existing assignment in the task. Does not change assignment state or wake the recipient. |
 | `read_inbox` | `task_id`, `recipient` | Unacknowledged messages, oldest first. Default 50, maximum 200. Optional `include_acknowledged`; use the last message's `id` as `after` for the next page. |
 | `acknowledge_message` | `task_id`, `message_id`, `actor` | Declared recipient marks the message read. Repeating it preserves the first acknowledgement timestamp. |
 | `record_event` | `task_id`, `actor`, `kind`, `message` | Appends evidence, with optional `stage`, `attempt`, structured `data`, and `request_key`. |
@@ -109,6 +109,20 @@ Every operation uses an explicit task ID; project identifiers are supplied strin
 | `record_usage` | `task_id`, `actor`, `stage`, `attempt`, `request_key`, `usage` | Records one model-request measurement with declared provider/model and provenance. |
 | `get_task_report` | `task_id` | Consistent structured totals, stage attempts, models, coverage, and a relative report URL. Avoids putting the full HTML in model context. |
 | `render_report` | `task_id` | Returns self-contained HTML and the report path. The caller can save the HTML; the server writes no report file. |
+
+The service also exposes seven structured coordination tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `register_participant` | Register a declared task instance and inbox routing identity, or explicitly replace an old instance. |
+| `list_participants` | Discover task participants, including retired registrations; not live presence. |
+| `create_assignment` | The registered task owner assigns work and atomically creates its notification/event. |
+| `get_assignment` | Read current state, version, ownership, inputs, and result. |
+| `list_assignments` | Query task work by assignee/state, with pagination. |
+| `update_assignment` | Assignee acceptance, decline, progress, blockers/input needs; owner cancellation. |
+| `submit_result` | Publish the assignee's structured outcome/evidence and notify the orchestrator atomically. |
+
+Read [participants and assignments](coordination.md) for actual inputs, examples, lifecycle, idempotency, replacement, and reporting. All coordination mutations require a request key. Submitted results remain separate from review, human approval, and overall task completion. These operations record work; they do not schedule it.
 
 Statuses are `pending`, `working`, `needs_input`, `blocked`, `complete`, and `cancelled`. They are records, not process-control commands. Cancelling a task does not interrupt an agent.
 
@@ -124,7 +138,7 @@ For example, ask a connected coordinator:
 
 > Read `.factory/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep the spec, plan, and review artifacts in the repository. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
 
-The coordinator creates and retains the task ID, sends explicit assignments, and updates status. Agents read their inbox at turn/iteration boundaries, acknowledge messages, and publish evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no automatic dispatcher or background agent scheduler.
+The orchestrator creates and retains the task ID, registers itself and workers, creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents read their inbox at turn/iteration boundaries, acknowledge messages, and publish evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no automatic dispatcher or background agent scheduler.
 
 Artifacts remain client-managed files. A decision event can include `data.outcome`, `data.artifacts` with paths and hashes, and a rationale in `message`. Check evidence can include commands, exit status, output references, tool versions, and MCP names. These values are submitted claims; the server does not inspect host files, run checks, validate artifact hashes, or grant approval. Secrets should never be included in event/message bodies; no automatic redaction is performed.
 
@@ -142,7 +156,7 @@ Normalize input tokens to include cached input. Cache read/write counts are subs
 
 The service does not intercept agent sessions or provider calls. Reliable automatic usage requires a runtime hook or importer that submits these records; none is bundled yet. Declared provenance is displayed but not independently verified.
 
-The HTML report includes current task state, recorded failures and messages, observed stage order, stage/attempt token graphs, models, cost, coverage, and structured evidence. It updates when the URL is fetched; it does not push changes into an open page. Save it for a point-in-time snapshot. With no stage or usage records, those sections explicitly show that information is missing.
+The HTML report includes task participant registrations, assignment ownership/state/result evidence, failed-result counts, current task state, recorded failures and messages, observed stage order, stage/attempt token graphs, models, cost, coverage, and structured evidence. It updates when the URL is fetched; it does not push changes into an open page. Save it for a point-in-time snapshot. With no stage or usage records, those sections explicitly show that information is missing.
 
 Input/output/cost cards sum available values and show how many usage records supplied them. A combined token total is available only when every recorded usage request has both input and output counts. Coverage describes submitted records, not completeness of the entire real session. Stage durations use server receipt timestamps of start/completion events, not a profiler. Recorded errors remain visible even if a later attempt succeeds.
 
@@ -159,7 +173,7 @@ Totals cover the entire task. The browser timeline shows at most the latest 500 
 | `COMMS_ADMIN_PORT` | `8091` | Optional SQLite Web panel loopback port. |
 | `FACTORY_COMMS_URL` | `http://127.0.0.1:8090/mcp` | Client/launcher endpoint; does not configure the server listener. |
 
-Go flags override the corresponding environment setting. The `health` argument checks the listener's `/healthz` endpoint and is used by Compose. No application repository mount is required. Database schema version 1 is initialized on startup; a newer unsupported schema fails rather than being silently rewritten.
+Go flags override the corresponding environment setting. The `health` argument checks the listener's `/healthz` endpoint and is used by Compose. No application repository mount is required. Schema 2 is initialized on startup. Existing schema-1 tasks/messages/events are upgraded transactionally without discarding evidence; legacy prose messages do not automatically become canonical assignments. A newer unsupported schema fails rather than being silently rewritten.
 
 From this directory, with Go 1.26+ installed:
 

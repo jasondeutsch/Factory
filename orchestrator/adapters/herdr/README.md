@@ -22,15 +22,13 @@ For a coder loop, first record the approved assignment durably, then add `--loop
 
 Name live sessions distinctly, such as `account-architect` and `account-coordinator`. Record the mapping in the task with `task.py note`. Herdr names have their own syntax and length rules; they are not the task's display name.
 
-Send a durable message and attempt a notification:
+Create canonical work with comms `create_assignment` using the registered participant IDs. It saves the assignment notification and event atomically; do not create another assignment message with a shell helper. After storage, notify the actual live session:
 
 ```bash
-python3 .factory/scripts/task.py send <task-path> --from coordinator --to architect \
-  --kind assignment --text "Draft the spec and plan from the task brief." \
-  --notify account-architect
+herdr agent prompt account-architect "Check your comms inbox for the assigned task."
 ```
 
-The message is saved before `herdr agent prompt` submits a short notification naming the task and message. Submission is not acknowledgement, acceptance, or completion. A failed notification leaves the message pending and returns a nonzero exit code with its ID; inspect the live agent before re-notifying. Do not create duplicate assignments because a wait or notification failed.
+Use only a known live name and safe argument quoting. Terminal input submission is not acknowledgement, acceptance, or completion. A notification failure leaves the assignment and message pending; inspect the agent and re-notify without duplicating work. Workers explicitly accept/decline and submit results through the [assignment tools](../../../comms/coordination.md).
 
 Use `herdr agent get <name>` and `herdr agent read <name> --source recent-unwrapped --lines 120` to inspect sessions. For explicit notification without creating another message, use `herdr agent prompt <name> "Check your task inbox."`. Herdr may reject blocked dialogs; do not answer an approval prompt on the user's behalf without authority. Terminal output is a view, not a durable task result.
 
