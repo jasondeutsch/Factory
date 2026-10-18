@@ -1,0 +1,15 @@
+{
+  "runner": "pi",
+  "config_dir": "pi",
+  "skills": [
+    "../../comms/skills/task-comms",
+    "skills/spec-and-plan",
+    "skills/software-architecture",
+    "skills/domain-modeling",
+    "../../skills/conventional-commits",
+    "../../skills/evidence-based-debugging",
+    "../../skills/linear-context"
+  ],
+  "args": [],
+  "env": {}
+}

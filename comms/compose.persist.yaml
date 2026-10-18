@@ -1,0 +1,7 @@
+# Explicit opt-in: docker compose -f compose.yaml -f compose.persist.yaml up --build -d
+services:
+  comms:
+    volumes:
+      - comms-data:/data
+volumes:
+  comms-data:

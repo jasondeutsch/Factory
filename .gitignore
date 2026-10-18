@@ -1,0 +1,9 @@
+tasks/*
+!tasks/.gitkeep
+**/config.local.json
+**/pi/*.local.json
+**/auth.json
+**/mcp-auth.json
+__pycache__/
+*.pyc
+.DS_Store

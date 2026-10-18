@@ -1,0 +1,20 @@
+# Opt-in panel with shared storage. Does not change the default ephemeral setup.
+# docker compose -f compose.yaml -f compose.admin.yaml up --build -d
+services:
+  comms:
+    volumes:
+      - comms-data:/data
+  sqlite-admin:
+    image: ghcr.io/coleifer/sqlite-web@sha256:ec3c5811216fa5f7313e9f7269e1a1ca9c1f24f5f5ac3668c1f398c97afa362b
+    user: "65532:65532"
+    entrypoint: ["sqlite_web", "--host", "0.0.0.0", "--no-browser", "--read-only"]
+    command: ["/data/state.db"]
+    ports:
+      - "127.0.0.1:${COMMS_ADMIN_PORT:-8091}:8080"
+    volumes:
+      - comms-data:/data:ro
+    depends_on:
+      comms:
+        condition: service_healthy
+volumes:
+  comms-data:

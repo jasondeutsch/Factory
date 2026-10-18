@@ -1,0 +1,7 @@
+/bin/
+*.db
+*.db-*
+*.test
+coverage*
+.env
+compose.override.yaml

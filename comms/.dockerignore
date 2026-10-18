@@ -1,0 +1,8 @@
+.git
+*.db
+*.db-*
+bin
+coverage*
+*.test
+.env*
+compose*.yaml

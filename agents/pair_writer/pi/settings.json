@@ -1,0 +1,13 @@
+{
+  "defaultThinkingLevel": "medium",
+  "defaultTools": [
+    "read",
+    "bash",
+    "edit",
+    "write",
+    "grep",
+    "find",
+    "ls"
+  ],
+  "cacheWarming": "off"
+}

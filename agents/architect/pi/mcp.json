@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "linear": {
+      "url": "https://mcp.linear.app/mcp/readonly",
+      "headers": {
+        "Authorization": "Bearer ${LINEAR_API_KEY}"
+      },
+      "description": "Read requested Linear issues, comments, projects, and related planning context.",
+      "exposure": "codemode",
+      "enabled": false
+    },
+    "comms": {
+      "url": "http://127.0.0.1:8090/mcp",
+      "description": "Factory task status, inbox messages, decisions, evidence, usage, and reports.",
+      "exposure": "codemode"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "runner": "pi",
+  "config_dir": "pi",
+  "skills": [
+    "../comms/skills/task-comms",
+    "../skills/conventional-commits"
+  ],
+  "args": [],
+  "env": {}
+}
