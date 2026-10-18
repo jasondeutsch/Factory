@@ -66,3 +66,12 @@ class CommsService:
             self.process.wait(timeout=5)
         self.log.close()
         self.temporary.cleanup()
+
+
+def bridge_binary():
+    server = server_binary()
+    binary = server.parent / "bridge"
+    if not binary.exists():
+        subprocess.run(["go", "build", "-o", str(binary), "./cmd/bridge"],
+                       cwd=Path(__file__).resolve().parents[1] / "comms", check=True, timeout=120)
+    return binary

@@ -52,7 +52,12 @@ def read_task(value: str) -> tuple[Path, dict]:
     if path.parent != ROOT / "tasks":
         raise ValueError("task must be a direct child of this project's .factory/tasks")
     data = json.loads((path / "task.json").read_text(encoding="utf-8"))
-    if data.get("schema_version") != 2 or data.get("id") != path.name or not data.get("comms_id") or data.get("project") != str(installed_project()):
+    if not isinstance(data, dict) or any(not isinstance(data.get(key), str) or not data[key]
+                                         for key in ("id", "comms_id", "project", "name", "factory", "owner")):
+        raise ValueError("task.json must be an object with nonempty id, comms_id, project, name, factory, and owner strings")
+    if not isinstance(data.get("brief"), str):
+        raise ValueError("task.json brief must be a string")
+    if data.get("schema_version") != 2 or data.get("id") != path.name or data.get("project") != str(installed_project()):
         raise ValueError("invalid task.json identity or schema_version")
     return path, data
 

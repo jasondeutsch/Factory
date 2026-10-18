@@ -56,8 +56,8 @@ func Open(path string) (*Store, error) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return failed(err)
 	}
-	if version > 3 {
-		return failed(fmt.Errorf("database schema %d is newer than supported schema 3", version))
+	if version > 4 {
+		return failed(fmt.Errorf("database schema %d is newer than supported schema 4", version))
 	}
 	if err := initializeSchema(ctx, db, version); err != nil {
 		return failed(err)
@@ -79,7 +79,7 @@ func initializeSchema(ctx context.Context, db *sql.DB, version int) error {
 			return fmt.Errorf("upgrade messages: %w", err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=3"); err != nil {
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=4"); err != nil {
 		return err
 	}
 	return tx.Commit()

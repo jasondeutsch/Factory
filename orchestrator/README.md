@@ -10,6 +10,8 @@ This is an implementation reference for coordinating agents and maintainers. Use
 
 Each factory's `factory.json` declares member names, bundle paths, per-member execution overrides, and the task owner. Paths are relative to that file. See the [configuration reference](../factories/README.md#factory-configuration). The recipe describes the process; it does not configure membership.
 
+Generated instructions include member names and bundle paths, with a link to the factory definition. Native configuration objects are kept out of prompts and dry-run output.
+
 A task-bound launch resolves its role from that factory's declaration. Without a task, the coordinator uses its bootstrap bundle; other role names must resolve to one distinct declared bundle across factories. A directory alone does not register an agent. New launches read current definitions; existing sessions retain their prepared configuration.
 
 ## Start a role
@@ -222,7 +224,7 @@ Ask the coordinator to resume a named task. It finds the project-scoped service 
 
 The coder's native settings declare the pinned `edxeth/pi-ralph-loop` package. Pi can install that declared dependency in the private profile; normal launcher credential/MCP checks do not load extensions. For a bounded coder launch, `session.py coder_golang <task-path> --loop 5` additionally loads the real runtime and checks Ralph command registration without sending a model prompt, then starts the loop in the interactive pane. This extra check can download the declared package and needs Git/network access unless a local source is configured. Its process timeout uses `check_timeout_seconds` too.
 
-After registration, a loop launch waits up to `check_timeout_seconds` for an offered, accepted, or working assignment to its actual participant. The coordinator creates that assignment during the wait; timeout prevents unassigned implementation. The loop checks current HTML document approvals at launch and uses the shared bounded-iteration skill. The plugin's root `.ralph/` state permits one active loop per workspace. Progress stays with the task, and replacement session transcripts stay private. See the [Ralph reference](references/ralph.md) for assignment, visibility, stop/resume behavior, and limits. This adds no Factory loop engine or automatic commit behavior.
+After registration, a loop launch waits up to `check_timeout_seconds` for an offered, accepted, or working assignment to its actual participant. The coordinator creates that assignment during the wait; timeout prevents unassigned implementation and records failure against the registered participant. Before retrying, inspect that stopped instance and explicitly replace it if needed. Assignment lookup follows all pages; terminal task status or changed approvals prevent loop launch. The loop checks current HTML document approvals at launch and uses the shared bounded-iteration skill. The plugin's root `.ralph/` state permits one active loop per workspace. Progress stays with the task, and replacement session transcripts stay private. See the [Ralph reference](references/ralph.md) for assignment, visibility, stop/resume behavior, and limits. This adds no Factory loop engine or automatic commit behavior.
 
 ## Other agent CLIs
 
@@ -239,3 +241,20 @@ To add shared guidance, create a focused `resources/skills/<name>/SKILL.md` and 
 Recipes in `factories/<factory>/README.md` are instructions interpreted by the coordinator. The task helper requires a valid `factory.json`, takes ownership from its `owner`, and scaffolds HTML drafts only for `golang`. Other factories receive a task pointer and reviews directory without HTML drafts. The `--loop` shortcut is specialized to `coder_golang` in `golang`. Adding Markdown does not generate another executable workflow or generalize these shortcuts automatically.
 
 The [tool guide](../docs/tools.md) explains these tradeoffs.
+
+
+## Factory readiness and dispatch
+
+Before starting coordinated work, the coordinator can check every member without creating a task or invoking a model:
+
+```sh
+python3 .factory/orchestrator/session.py --check-factory --factory golang
+```
+
+Each member gets its existing native startup check. The aggregate JSON reports all members, exit status is nonzero if any failed, and detailed diagnostics remain in private runtime files. A command runner without a native check is reported as unsupported, not ready. Successful credential resolution does not prove a provider will accept a model request.
+
+For a single explicit handoff inside Herdr, use the [dispatch operation](references/dispatch.md). It starts a visible member, discovers its real identity, creates one assignment, and checks notification delivery. Stable retry keys recover intermediate actions. The coordinator retains all workflow decisions.
+
+Task-bound launches publish an immutable public session snapshot to comms after registration. `get_session` exposes selected runner/model/thinking, MCP names, instruction/skill hashes, and startup-check status. The fingerprint covers these public selections and native tool selection; it does not fingerprint credential values, all native provider options, or environment contents. Compare the recorded skill hashes with current source to identify changed instructions; editing source does not update a running session.
+
+The bound delivery bridge samples host contact, including empty inboxes. Contact expires to `unknown` after 30 seconds. `working` means Herdr observed activity, not that an assignment progressed. Startup failures remain task events; absence of a snapshot or stale contact is never evidence of completion.

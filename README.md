@@ -10,7 +10,7 @@ resources/          # Reusable architect/reviewer agents and shared skills
 factories/
   golang/           # Go factory definition, recipe, agents, skills, templates, and tests
   writing/          # Writing factory definition, recipe, and pair-writer agent
-docs/               # Setup, tools, and task records
+docs/               # Setup, troubleshooting, and tool tradeoffs
 ```
 
 **Each factory's `factory.json` declares its member names, bundle paths, and task owner.** Its `README.md` describes how those members work together. Directory placement does not define membership. See the [configuration reference](factories/README.md), [Go configuration](factories/golang/factory.json), and [writing configuration](factories/writing/factory.json).
@@ -79,3 +79,5 @@ This is an agent-driven process, not a workflow execution engine or enforced san
 - [Participants and assignments](orchestrator/comms/coordination.md): lifecycle, ownership, retries, and recovery.
 - [Setup and troubleshooting](docs/troubleshooting.md): dependencies, failures, and developer tests.
 - [Ralph integration](orchestrator/references/ralph.md): bounded iteration and recovery limits.
+
+For reliable coordinator handoffs, see [dispatch and recovery](orchestrator/references/dispatch.md). For infrastructure evidence and the separate live acceptance run, see [coordination verification](orchestrator/tests/README.md).

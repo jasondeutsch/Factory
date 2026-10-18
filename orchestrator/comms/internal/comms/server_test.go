@@ -27,7 +27,7 @@ func TestHTTPMCPRoundTripAndReport(t *testing.T) {
 	t.Cleanup(func() { session.Close() })
 	tools, err := session.ListTools(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, tools.Tools, 23)
+	require.Len(t, tools.Tools, 27)
 	call := func(name string, input, output any) {
 		t.Helper()
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: input})
@@ -63,6 +63,8 @@ func TestHTTPMCPRoundTripAndReport(t *testing.T) {
 	var owner, worker Participant
 	call("register_participant", RegisterParticipantInput{TaskID: task.ID, InstanceID: "owner-instance", Role: "orchestrator", RoutingIdentity: task.Owner, RequestKey: "register-owner"}, &owner)
 	call("register_participant", RegisterParticipantInput{TaskID: task.ID, InstanceID: "worker-instance", Role: "coder", RoutingIdentity: "worker", RequestKey: "register-worker"}, &worker)
+	call("bind_participant", BindParticipantInput{TaskID: task.ID, ParticipantID: worker.ID, Actor: worker.ID, SessionRef: "captured-host-reference", RequestKey: "bind-http"}, &worker)
+	assert.Equal(t, "captured-host-reference", worker.SessionRef)
 	var roster participantList
 	call("list_participants", ListParticipantsInput{TaskID: task.ID}, &roster)
 	require.Len(t, roster.Participants, 2)

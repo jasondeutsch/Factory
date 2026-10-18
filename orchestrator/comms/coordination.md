@@ -23,6 +23,12 @@ The task owner also registers a participant. Its `routing_identity` must equal `
 
 Factory launchers supply `FACTORY_INSTANCE_ID` and an `Instance ID` instruction. The ID remains available through runner-managed context resets; do not generate a new registration every turn. Other hosts supply an equivalent stable instance reference. An unassigned session registers after a task is selected. `list_participants` returns registration facts, including retired instances, **not live availability**. There is no heartbeat or presence monitor yet.
 
+### Host binding for an existing instance
+
+After a running agent has a captured host reference, call `bind_participant` with `task_id`, `participant_id`, `actor_participant_id`, `expected_session_ref`, `session_ref`, and `request_key`. The actor must be that participant or the active task owner. Use the current reference from `list_participants` (an empty string when absent) as the expected value. Stale updates fail, and retries with the original key replay the original response.
+
+This attaches or clears delivery information without retiring the instance or changing its assignments. It does not verify the host reference or establish liveness. Use replacement for a different process; use binding to enable delivery to the existing one. See [Herdr binding setup](delivery.md#setup-through-the-coordinator).
+
 ### Replacement
 
 A genuinely new process/session uses a new instance ID. To reuse an old routing identity, explicitly include `replaces_participant_id` in registration. The referenced participant must belong to the task and have the same role and routing identity. The transaction retires the old instance and registers the replacement; it never transfers assignments. Old instance records and evidence remain.

@@ -9,9 +9,11 @@ import json
 import os
 import shutil
 import string
+import subprocess
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -57,7 +59,9 @@ def approved_documents(task: Path) -> None:
     """
     _, metadata = read_task(str(task))
     client = Client()
-    remote_task(metadata, client)
+    record = remote_task(metadata, client)
+    if record["status"] in ("complete", "cancelled"):
+        raise ValueError("task is complete or cancelled; reconcile with its owner before starting a loop")
     latest = {}
     for record in client.events(metadata["comms_id"]):
         if record["kind"] != "decision":
@@ -82,7 +86,7 @@ def approved_documents(task: Path) -> None:
             raise ValueError(f"Ralph requires approval of the current {name}; ask the coordinator to record the actual decision")
 
 
-def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, loop_iterations: int | None = None, factory: str | None = None) -> dict:
+def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, loop_iterations: int | None = None, factory: str | None = None, instance_id: str | None = None) -> dict:
     project = installed_project()
     if metadata and factory and metadata["factory"] != factory:
         raise ValueError("--factory conflicts with the task's recorded factory")
@@ -96,7 +100,7 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
             raise ValueError(f"skill must be inside the portable toolbox: {value}")
         skill_files.append(path / "SKILL.md" if path.is_dir() else path)
     project_key = hashlib.sha256(str(project).encode()).hexdigest()[:16]
-    session = runtime / project_key / (task.name if task else "unassigned") / role / uuid.uuid4().hex
+    session = runtime / project_key / (task.name if task else "unassigned") / role / (instance_id or uuid.uuid4().hex)
     context = (f"Role: {role}\nProject root: {project}\nToolkit root: {ROOT}\nInstance ID: {session.name}\n"
                f"Role instruction source: {instruction}\n")
     recipe_text = ""
@@ -115,9 +119,15 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         )
     if selected_factory is not None:
         recipe = factory_recipe(selected_factory)
+        definition = factory_definition(selected_factory)
+        # Native configuration can contain credentials or credential commands.
+        # Supply membership to the model, retaining the source path for reference.
+        membership = {"name": definition["name"], "owner": definition["owner"],
+                      "agents": [{"name": member["name"], "path": member["path"]}
+                                 for member in definition["agents"]]}
         context += f"Selected factory configuration: {recipe.parent / 'factory.json'}\n"
-        recipe_text = (f"\n## Factory configuration\n\nSource: {recipe.parent / 'factory.json'}\n"
-                       f"{json.dumps(factory_definition(selected_factory), indent=2)}\n"
+        recipe_text = (f"\n## Factory membership\n\nSource: {recipe.parent / 'factory.json'}\n"
+                       f"{json.dumps(membership, indent=2)}\n"
                        f"\n## Factory recipe\n\nSource file: {recipe}\n"
                        f"Source directory for relative references: {recipe.parent}\n\n"
                        f"{recipe.read_text(encoding='utf-8')}\n")
@@ -242,34 +252,85 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         "instructions_file": str(instruction_file), "instructions": instructions,
         "environment_references": mapping, "child_env": child_env,
         "pi_profile": profile, "runner_configuration": profile["summary"] if profile else None,
+        "manifest": session_manifest(runner, instruction, skill_files, profile),
         "check_timeout_seconds": config.get("check_timeout_seconds", 30),
     }
+
+
+def session_manifest(runner: str, instruction: Path, skills: list[Path], profile: dict | None) -> dict:
+    summary = profile["summary"] if profile else {}
+    snapshot = {
+        "runner": runner, "provider": summary.get("provider") or "", "model": summary.get("model") or "",
+        "thinking": summary.get("thinking") or "", "mcps": summary.get("enabled_mcps", []),
+        "skills": [{"path": str(path.relative_to(ROOT)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                   for path in [instruction, *skills]],
+    }
+    # Fingerprint only public behavior settings; never hash auth files or secret
+    # values. This describes the loaded instruction/model/tool selection.
+    fingerprint = {**snapshot, "tools": profile["files"]["settings"].get("defaultTools", []) if profile else []}
+    snapshot["configuration_fingerprint"] = hashlib.sha256(json.dumps(fingerprint, sort_keys=True).encode()).hexdigest()
+    snapshot["prepared_at"] = datetime.now(timezone.utc).isoformat()
+    snapshot["startup_checked"] = False
+    return snapshot
 
 
 def wait_for_assignment(client: Client, task_id: str, participant_id: str, timeout: float) -> None:
     """Do not start a Ralph iteration before the owner can assign this real instance."""
     deadline = time.monotonic() + timeout
     while True:
-        assignments = client.call("list_assignments", task_id=task_id, assignee_id=participant_id, limit=200)["assignments"]
-        if any(item["state"] in ("offered", "accepted", "working") for item in assignments):
-            return
+        task = client.call("get_task", task_id=task_id)
+        if task["status"] in ("complete", "cancelled"):
+            raise ValueError("task is complete or cancelled; loop startup stopped")
+        after = ""
+        while True:
+            assignments = client.call("list_assignments", task_id=task_id, assignee_id=participant_id,
+                                      after=after, limit=200)["assignments"]
+            if any(item["state"] in ("offered", "accepted", "working") for item in assignments):
+                return
+            if len(assignments) < 200:
+                break
+            after = assignments[-1]["id"]
         if time.monotonic() >= deadline:
-            raise ValueError("no active assignment for the registered loop instance; ask the coordinator to assign it before retrying; do not implement unassigned work")
+            raise ValueError(f"no active assignment for participant {participant_id}; this launcher is stopping. "
+                             "Inspect its assignments before an explicit replacement; do not assign work to this stopped instance")
         time.sleep(min(1, max(0, deadline - time.monotonic())))
+
+
+def check_factory(name: str, runtime: Path) -> dict:
+    """Run existing checks in isolation; collect every member's outcome."""
+    definition = factory_definition(name)
+    members = []
+    for member in definition["agents"]:
+        role = member["name"]
+        # Keep raw native/config errors private; some runners echo credentials.
+        directory = runtime / "checks" / uuid.uuid4().hex
+        directory.mkdir(parents=True, mode=0o700)
+        diagnostics = directory / "check.log"
+        with diagnostics.open("w", encoding="utf-8") as output:
+            result = subprocess.run([sys.executable, str(Path(__file__).resolve()), role,
+                                     "--factory", name, "--check"],
+                                    stdout=output, stderr=subprocess.STDOUT, check=False)
+        members.append({"name": role, "ready": result.returncode == 0,
+                        "diagnostics": str(diagnostics),
+                        "next_action": "" if result.returncode == 0 else "Inspect private diagnostics and correct this member's configuration or dependencies"})
+    return {"factory": name, "ready": all(member["ready"] for member in members), "members": members}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("role")
+    parser.add_argument("role", nargs="?")
     parser.add_argument("task", nargs="?", help="explicit local task artifact directory; omit to start an unassigned interactive role")
     parser.add_argument("--factory", help="explicit factory configuration for an unassigned session; must match a supplied task")
+    parser.add_argument("--instance-id", help="dispatch-owned process identity; a launch is never resent automatically")
     parser.add_argument("--routing-identity", help="explicit task inbox identity; defaults to role")
     parser.add_argument("--replace-participant", help="explicit prior participant ID to retire; assignments are not transferred")
     parser.add_argument("--loop", type=int, metavar="ITERATIONS", help="start an approved Go coder assignment in a bounded native Ralph loop")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="print the launch plan without writes; --loop reads comms approvals")
     mode.add_argument("--check", action="store_true", help="prepare private configuration and check native startup without starting chat")
+    mode.add_argument("--check-factory", action="store_true", help="check every member of --factory without model work or task registration")
     args = parser.parse_args()
+    participant = None
     try:
         installed_project()
         task, metadata = read_task(args.task) if args.task else (None, None)
@@ -277,13 +338,24 @@ def main() -> int:
         runtime = Path(override).expanduser() if override else Path.home() / ".factory" / "runtime"
         if not runtime.is_absolute():
             raise ValueError("FACTORY_RUNTIME_DIR must be absolute")
+        if args.check_factory:
+            if not args.factory or args.role or args.task or args.loop or args.routing_identity or args.replace_participant or args.instance_id:
+                raise ValueError("--check-factory requires --factory and no role, task, loop, or participant options")
+            os.umask(0o077)
+            report = check_factory(args.factory, runtime)
+            print_json(report)
+            return 0 if report["ready"] else 1
+        if not args.role:
+            raise ValueError("role is required unless using --check-factory")
         if not args.dry_run and task is not None:
             record = remote_task(metadata)
             for field in ("name", "brief", "owner"):
                 metadata[field] = record[field]
         if task is None and (args.routing_identity or args.replace_participant):
             raise ValueError("participant options require an explicit task")
-        plan = prepare(args.role, task, metadata, runtime, args.loop, args.factory)
+        if args.instance_id and (task is None or len(args.instance_id) != 32 or any(c not in "0123456789abcdef" for c in args.instance_id)):
+            raise ValueError("--instance-id requires a task and 32 lowercase hexadecimal characters")
+        plan = prepare(args.role, task, metadata, runtime, args.loop, args.factory, args.instance_id)
         if args.dry_run:
             print_json({key: value for key, value in plan.items() if key not in ("child_env", "pi_profile")})
             return 0
@@ -311,6 +383,7 @@ def main() -> int:
                 except (ValueError, OSError):
                     print("Factory: could not record startup failure in comms; private diagnostics remain available.", file=sys.stderr)
                 raise
+            plan["manifest"]["startup_checked"] = True
             if task is not None:
                 event(task, "session_checked", args.role, **checked)
             if args.check:
@@ -333,15 +406,26 @@ def main() -> int:
                              f"Participant ID: {participant['id']}\n"
                              f"Routing identity: {participant['routing_identity']}\n"
                              "The launcher registered this instance. Reuse this participant; do not register a replacement.\n")
+            Client().call("record_session", task_id=metadata["comms_id"], participant_id=participant["id"],
+                          manifest=plan["manifest"], request_key="snapshot-" + instructions.parent.name)
             print(f"Factory: registered {participant['routing_identity']} ({participant['id']})", file=sys.stderr)
             event(task, "session_prepared", args.role, instructions_file=str(instructions), runner=plan["command"][0], participant_id=participant["id"])
             if args.loop is not None:
                 print("Factory: waiting for the coordinator to assign this registered loop instance...", file=sys.stderr)
                 wait_for_assignment(Client(), metadata["comms_id"], participant["id"], plan["check_timeout_seconds"])
+                # Checks and assignment waiting may take time. A later rejection
+                # or document edit must prevent the initial autonomous iteration.
+                approved_documents(task)
         os.chdir(plan["cwd"])
         os.execvpe(plan["command"][0], plan["command"], plan["child_env"])
         return 0
     except (OSError, ValueError) as error:
+        if participant is not None:
+            try:
+                event(task, "session_startup_failed", args.role, participant_id=participant["id"],
+                      error=str(error), runtime_dir=str(instructions.parent))
+            except (OSError, ValueError):
+                print("Factory: could not record the registered session's startup failure in comms.", file=sys.stderr)
         print(f"factory session: {error}", file=sys.stderr)
         return 1
 

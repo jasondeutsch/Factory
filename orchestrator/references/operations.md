@@ -48,7 +48,7 @@ Use `send_message` with optional `assignment_id` for questions, findings, peer e
 
 Use `get_task` then `update_task` with `expected_version` for owner status changes. Record stage starts, completions, checks, failures, session mapping, and scoped delegation using `record_event`. Read paginated history on recovery. Present `get_task_report` metrics and the full report URL, including missing usage coverage. A stopped process or idle pane is not evidence of completion.
 
-The shell helper's `send --kind assignment` remains a generic message and does not create structured ownership; use `create_assignment` for work. Its `status`, `send`, `inbox`, `ack`, `note`, and `decide` operations call the same MCP service. They exist for deterministic operations and shell-only clients, not a second required lifecycle. `send --notify <live-name>` saves first and then attempts Herdr notification. Stable `--request-key` is available for message/task retries after an uncertain response. Preserve the original key and payload; do not blindly repeat a write with a new identity.
+The shell helper's `send --kind assignment` remains a generic message and does not create structured ownership; use `create_assignment` for work. Its `status`, `send`, `inbox`, `ack`, `note`, and `decide` operations call the same MCP service. They exist for deterministic operations and shell-only clients, not a second required lifecycle. `send --notify <live-name>` saves first and delegates notification to the verified delivery bridge. Its `checked` receipt does not assert a new input submission; inspect the delivery ledger for the exact outcome. Stable `--request-key` is available for message/task retries after an uncertain response. Preserve the original key and payload; do not blindly repeat a write with a new identity.
 
 ## Record an actual conversational decision
 
@@ -64,3 +64,8 @@ Use the actual decision, deciding identity, and rationale. This is an agent oper
 ## Maintainer verification
 
 From the toolkit root, run `python3 -B -m unittest discover -s orchestrator/tests -v` for infrastructure and launcher integration tests, and `python3 -B -m unittest discover -s factories/golang/tests -v` for the Go factory's check-script and native Ralph tests. Tests build the real comms server (Go required), start isolated localhost instances with disposable SQLite files, and use fake agent executables. `FACTORY_TEST_COMMS` can select an already built server binary. Optional native Pi/Ralph tests are described in [troubleshooting](../../docs/troubleshooting.md). No model quality or live Herdr behavior is implied by these checks.
+
+
+For coordinated Herdr handoffs, use [deterministic dispatch](dispatch.md) instead of separately opening a pane, guessing a participant, creating an assignment, and prompting it. The orchestrator owns the requested work; the helper owns recovery of that one operation.
+
+Task attachment stages the complete scaffold before publishing its directory and serializes concurrent attaches. Repeating attachment preserves authored documents and retries the same comms evidence write. An incomplete older attachment fails explicitly rather than overwriting its contents. Hidden `.attaching-*` directories left by a killed process are unpublished scaffolds, not tasks.

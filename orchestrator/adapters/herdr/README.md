@@ -2,6 +2,8 @@
 
 This reference is for the coordinating agent. For coordinated factory work, open or reuse visible role sessions as needed; handle pane controls and helper calls on the user's behalf. The default is ordinary interactive sessions, each in a pane. No extension or MCP server is required. Only control Herdr from a Herdr-managed pane (`HERDR_ENV=1`). Outside Herdr, explain that the user must open their coordinating session there first; do not operate another focused session implicitly.
 
+For normal coordinator dispatch, use the [single dispatch operation](../../references/dispatch.md). The manual controls below remain useful for inspection and explicit recovery.
+
 ## Manual panes
 
 The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in manual mode. The optional [host delivery bridge](../../comms/delivery.md) provides inbox notifications without a runner extension.
@@ -24,13 +26,11 @@ Name live sessions distinctly, such as `account-architect` and `account-coordina
 
 Create canonical work with comms `create_assignment` using the registered participant IDs. It saves the assignment notification and event atomically; do not create another assignment message with a shell helper. After storage, notify the actual live session:
 
-```bash
-herdr agent prompt account-architect "Check your comms inbox for the assigned task."
-```
+Use the [one-shot notification operation](#one-shot-inbox-notification) below so delivery claims prevent duplicate input.
 
 Use only a known live name and safe argument quoting. Terminal input submission is not acknowledgement, acceptance, or completion. A notification failure leaves the assignment and message pending; inspect the agent and re-notify without duplicating work. Workers explicitly accept/decline and submit results through the [assignment tools](../../comms/coordination.md).
 
-Use `herdr agent get <name>` and `herdr agent read <name> --source recent-unwrapped --lines 120` to inspect sessions. For explicit notification without creating another message, use `herdr agent prompt <name> "Check your task inbox."`. Herdr may reject blocked dialogs; do not answer an approval prompt on the user's behalf without authority. Terminal output is a view, not a durable task result.
+Use `herdr agent get <name>` and `herdr agent read <name> --source recent-unwrapped --lines 120` to inspect sessions. For explicit notification without creating another message, use the one-shot bridge below. Herdr may reject blocked dialogs; do not answer an approval prompt on the user's behalf without authority. Terminal output is a view, not a durable task result.
 
 Workers explicitly send results to the coordinator's mailbox. Humans can enter any pane and give feedback; workers report material changes to the coordinator. Native session history stays available through the selected agent runner.
 
@@ -42,7 +42,7 @@ The core toolbox neither installs this extension nor assumes all runners support
 
 ## Automatic inbox delivery
 
-Use the [delivery bridge setup](../../comms/delivery.md) to capture each live named session as structured `session_ref` before participant registration. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
+Use the [delivery bridge setup](../../comms/delivery.md) to capture each live named session as structured `session_ref` and attach it to its existing participant with `bind_participant`. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
 
 ## One-shot inbox notification
 

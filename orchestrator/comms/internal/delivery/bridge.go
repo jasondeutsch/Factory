@@ -73,6 +73,7 @@ func (b Bridge) task(ctx context.Context, task comms.Task) error {
 			if participant.RetiredAt != nil {
 				continue
 			}
+			b.observe(ctx, participant)
 			if err := b.inbox(ctx, participant); err != nil {
 				return err
 			}
@@ -177,16 +178,13 @@ func (b Bridge) deliverInbox(ctx context.Context, p comms.Participant, strict bo
 			}
 			if claim.Delivery == nil {
 				if strict {
-					var history struct {
-						Deliveries []comms.Delivery `json:"deliveries"`
-					}
-					if err := b.Client.Call(ctx, "list_deliveries", comms.TaskInput{TaskID: p.TaskID}, &history); err != nil {
-						return err
-					}
-					for _, prior := range history.Deliveries {
-						if prior.ParticipantID == p.ID && prior.MessageID == message.ID && prior.State != "submitted" {
-							return fmt.Errorf("notification remains %s: %s; inspect before retrying", prior.State, prior.Detail)
-						}
+					switch claim.State {
+					case "submitted", "acknowledged", "ineligible":
+						// Already handled or no longer actionable.
+					case "claimed", "retry", "failed", "uncertain":
+						return fmt.Errorf("notification remains %s: %s; inspect before retrying", claim.State, claim.Detail)
+					default:
+						return errors.New("comms returned no delivery claim status; update the comms service before retrying")
 					}
 				}
 				continue
@@ -229,5 +227,28 @@ func (b Bridge) deliverInbox(ctx context.Context, p comms.Participant, strict bo
 			return nil
 		}
 		after = page.Messages[len(page.Messages)-1].ID
+	}
+}
+
+// Observation runs even when the inbox is empty. Failure to report contact must
+// not fabricate successful contact or prevent independent message delivery.
+func (b Bridge) observe(ctx context.Context, p comms.Participant) {
+	observer, ok := b.Host.(interface {
+		Observe(context.Context, Binding) (string, error)
+	})
+	if !ok || p.SessionRef == "" {
+		return
+	}
+	var binding Binding
+	if json.Unmarshal([]byte(p.SessionRef), &binding) != nil || binding.Validate() != nil {
+		return
+	}
+	state, err := observer.Observe(ctx, binding)
+	if err != nil {
+		state = "unavailable"
+	}
+	var snapshot comms.SessionSnapshot
+	if err := b.Client.Call(ctx, "record_contact", comms.ContactInput{TaskID: p.TaskID, ParticipantID: p.ID, ExpectedSessionRef: p.SessionRef, State: state}, &snapshot); err != nil {
+		slog.Default().Warn("could not record host contact", "participant", p.ID, "error", err)
 	}
 }

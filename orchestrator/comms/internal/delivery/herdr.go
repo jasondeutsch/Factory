@@ -100,20 +100,33 @@ func (h Herdr) Bind(ctx context.Context, name string) (Binding, error) {
 // Ready refuses busy, blocked, unknown, replaced or moved sessions. It does not
 // interrupt agents or answer dialogs. Missing optional readiness is supported
 // for older Herdr versions, but a known negative value always prevents input.
-func (h Herdr) Ready(ctx context.Context, b Binding) (bool, error) {
+func (h Herdr) Observe(ctx context.Context, b Binding) (string, error) {
 	if err := b.Validate(); err != nil {
-		return false, err
+		return "unavailable", err
 	}
 	response, err := h.command(ctx, "agent", "get", b.PaneID)
 	if err != nil {
-		return false, err
+		return "unavailable", err
 	}
 	a := response.Result.Agent
 	if response.Result.Type != "agent_info" || a.Agent == "" || a.Name != b.Name || a.WorkspaceID != b.WorkspaceID || a.PaneID != b.PaneID || a.TerminalID != b.TerminalID {
-		return false, errors.New("Herdr session binding changed; inspect the participant before replacing it")
+		return "unavailable", errors.New("Herdr session binding changed; inspect the participant before replacing it")
 	}
-	return (a.Status == "idle" || a.Status == "done") && !a.LaunchPending && (a.InteractiveReady == nil || *a.InteractiveReady), nil
+	switch a.Status {
+	case "working", "blocked":
+		return a.Status, nil
+	case "idle", "done":
+		if !a.LaunchPending && (a.InteractiveReady == nil || *a.InteractiveReady) {
+			return "idle", nil
+		}
+	}
+	return "unknown", nil
 }
+func (h Herdr) Ready(ctx context.Context, b Binding) (bool, error) {
+	state, err := h.Observe(ctx, b)
+	return state == "idle", err
+}
+
 func (h Herdr) Prompt(ctx context.Context, b Binding, text string) error {
 	if err := b.Validate(); err != nil {
 		return err

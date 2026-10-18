@@ -330,3 +330,48 @@ func TestAssignmentDeclineAndTerminalTaskGuards(t *testing.T) {
 	_, err := store.UpdateAssignment(t.Context(), UpdateAssignmentInput{TaskID: task.ID, AssignmentID: declined.ID, Actor: worker.ID, ExpectedVersion: declined.Version, State: "accepted", Summary: "Resurrect", RequestKey: "resurrect"})
 	require.ErrorContains(t, err, "invalid assignment transition")
 }
+
+func TestBindParticipantPreservesIdentityAndAssignment(t *testing.T) {
+	store := testStore(t)
+	task := testTask(t, store, "team")
+	owner := testParticipant(t, store, task, task.Owner)
+	worker := testParticipant(t, store, task, "coder")
+	peer := testParticipant(t, store, task, "reviewer")
+	assignment := testAssignment(t, store, task, owner, worker)
+	input := BindParticipantInput{TaskID: task.ID, ParticipantID: worker.ID, Actor: owner.ID, SessionRef: `{"adapter":"herdr","name":"coder"}`, RequestKey: "bind-coder"}
+	bound, err := store.BindParticipant(t.Context(), input)
+	require.NoError(t, err)
+	assert.Equal(t, worker.ID, bound.ID)
+	assert.Equal(t, worker.InstanceID, bound.InstanceID)
+	assert.Nil(t, bound.RetiredAt)
+	assert.Equal(t, input.SessionRef, bound.SessionRef)
+	replayed, err := store.BindParticipant(t.Context(), input)
+	require.NoError(t, err)
+	assert.Equal(t, bound, replayed)
+	current, err := store.Assignment(t.Context(), AssignmentInput{TaskID: task.ID, AssignmentID: assignment.ID})
+	require.NoError(t, err)
+	assert.Equal(t, assignment, current)
+
+	input.RequestKey = "stale-bind"
+	input.SessionRef = "changed"
+	_, err = store.BindParticipant(t.Context(), input)
+	require.ErrorContains(t, err, "stale session binding")
+	input.ExpectedSessionRef = bound.SessionRef
+	input.Actor = peer.ID
+	_, err = store.BindParticipant(t.Context(), input)
+	require.ErrorContains(t, err, "only the participant")
+	input.Actor = worker.ID
+	input.SessionRef = ""
+	input.RequestKey = "disable-delivery"
+	detached, err := store.BindParticipant(t.Context(), input)
+	require.NoError(t, err)
+	assert.Empty(t, detached.SessionRef)
+	_, err = store.RegisterParticipant(t.Context(), RegisterParticipantInput{TaskID: task.ID, InstanceID: "replacement", Role: worker.Role, RoutingIdentity: worker.RoutingIdentity, ReplacesParticipantID: worker.ID, RequestKey: "replace"})
+	require.NoError(t, err)
+	input.Actor, input.RequestKey, input.ExpectedSessionRef = owner.ID, "retired-bind", ""
+	_, err = store.BindParticipant(t.Context(), input)
+	require.ErrorContains(t, err, "retired")
+	input.TaskID = testTask(t, store, "other").ID
+	_, err = store.BindParticipant(t.Context(), input)
+	require.ErrorContains(t, err, "not found")
+}

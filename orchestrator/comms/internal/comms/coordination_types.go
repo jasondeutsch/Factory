@@ -29,6 +29,17 @@ type ListParticipantsInput struct {
 	Limit  int    `json:"limit,omitempty" jsonschema:"Default 50, maximum 200"`
 }
 
+// Binding changes describe the same process. A new process still requires an
+// explicit replacement and must not inherit this participant's assignments.
+type BindParticipantInput struct {
+	TaskID             string `json:"task_id"`
+	ParticipantID      string `json:"participant_id"`
+	Actor              string `json:"actor_participant_id"`
+	ExpectedSessionRef string `json:"expected_session_ref"`
+	SessionRef         string `json:"session_ref" jsonschema:"Captured host reference for this same instance; empty disables background delivery"`
+	RequestKey         string `json:"request_key"`
+}
+
 type Assignment struct {
 	ID                   string            `json:"id"`
 	TaskID               string            `json:"task_id"`

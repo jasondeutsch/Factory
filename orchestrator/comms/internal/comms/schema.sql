@@ -100,3 +100,11 @@ CREATE TABLE IF NOT EXISTS deliveries (
  PRIMARY KEY(message_id,participant_id)
 );
 CREATE INDEX IF NOT EXISTS delivery_participant ON deliveries(task_id,participant_id,state);
+
+CREATE TABLE IF NOT EXISTS sessions (
+ participant_id TEXT PRIMARY KEY REFERENCES participants(id),
+ manifest TEXT NOT NULL,
+ contact_state TEXT NOT NULL DEFAULT 'unknown',
+ observed_at TEXT NOT NULL DEFAULT '',
+ expires_at TEXT NOT NULL DEFAULT ''
+);

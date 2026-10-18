@@ -68,3 +68,41 @@ func participants(ctx context.Context, reader databaseReader, input ListParticip
 func (s *Store) Participants(ctx context.Context, input ListParticipantsInput) ([]Participant, error) {
 	return participants(ctx, s.db, input)
 }
+
+func (s *Store) BindParticipant(ctx context.Context, input BindParticipantInput) (Participant, error) {
+	if err := required("participant_id", input.ParticipantID, "actor_participant_id", input.Actor); err != nil {
+		return Participant{}, err
+	}
+	return coordinationMutation(ctx, s, input.TaskID, "participant:"+input.Actor, input.RequestKey, "bind_participant", input, func(tx *sql.Tx) (Participant, error) {
+		participant, err := activeParticipant(ctx, tx, input.TaskID, input.ParticipantID)
+		if err != nil {
+			return participant, err
+		}
+		actor, err := activeParticipant(ctx, tx, input.TaskID, input.Actor)
+		if err != nil {
+			return participant, err
+		}
+		task, err := scanTask(tx.QueryRowContext(ctx, "SELECT "+taskColumns+" FROM tasks WHERE id=?", input.TaskID))
+		if err != nil {
+			return participant, err
+		}
+		if actor.ID != participant.ID && actor.RoutingIdentity != task.Owner {
+			return participant, errors.New("only the participant or declared task owner can update its session binding")
+		}
+		if participant.SessionRef != input.ExpectedSessionRef {
+			return participant, errors.New("stale session binding; read the current participant before binding")
+		}
+		_, err = tx.ExecContext(ctx, "UPDATE participants SET session_ref=? WHERE task_id=? AND id=?", input.SessionRef, input.TaskID, input.ParticipantID)
+		if err != nil {
+			return participant, err
+		}
+		if participant.SessionRef != input.SessionRef {
+			if _, err := tx.ExecContext(ctx, "UPDATE sessions SET contact_state='unknown',observed_at='',expires_at='' WHERE participant_id=?", participant.ID); err != nil {
+				return participant, err
+			}
+		}
+		participant.SessionRef = input.SessionRef
+		err = appendEvent(ctx, tx, input.TaskID, actor.RoutingIdentity, "participant_bound", "Host binding updated for the same participant instance", map[string]any{"participant_id": participant.ID, "bound": input.SessionRef != ""})
+		return participant, err
+	})
+}

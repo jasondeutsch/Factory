@@ -80,30 +80,31 @@ type StageSummary struct {
 }
 
 type TaskReport struct {
-	Deliveries             []Delivery      `json:"deliveries"`
-	DeliveryCounts         map[string]int  `json:"delivery_counts"`
-	FailedResults          int             `json:"failed_results"`
-	Participants           []Participant   `json:"participants"`
-	ParticipantCount       int             `json:"participant_count"`
-	Assignments            []Assignment    `json:"assignments"`
-	AssignmentCount        int             `json:"assignment_count"`
-	AssignmentCounts       map[string]int  `json:"assignment_counts"`
-	Task                   Task            `json:"task"`
-	GeneratedAt            string          `json:"generated_at"`
-	EventCounts            map[string]int  `json:"event_counts"`
-	EventCount             int             `json:"event_count"`
-	MessageCount           int             `json:"message_count"`
-	UnacknowledgedMessages int             `json:"unacknowledged_messages"`
-	Usage                  UsageTotals     `json:"usage"`
-	Stages                 []*StageSummary `json:"stages"`
-	ReportPath             string          `json:"report_path"`
+	Sessions               []SessionSnapshot `json:"sessions"`
+	Deliveries             []Delivery        `json:"deliveries"`
+	DeliveryCounts         map[string]int    `json:"delivery_counts"`
+	FailedResults          int               `json:"failed_results"`
+	Participants           []Participant     `json:"participants"`
+	ParticipantCount       int               `json:"participant_count"`
+	Assignments            []Assignment      `json:"assignments"`
+	AssignmentCount        int               `json:"assignment_count"`
+	AssignmentCounts       map[string]int    `json:"assignment_counts"`
+	Task                   Task              `json:"task"`
+	GeneratedAt            string            `json:"generated_at"`
+	EventCounts            map[string]int    `json:"event_counts"`
+	EventCount             int               `json:"event_count"`
+	MessageCount           int               `json:"message_count"`
+	UnacknowledgedMessages int               `json:"unacknowledged_messages"`
+	Usage                  UsageTotals       `json:"usage"`
+	Stages                 []*StageSummary   `json:"stages"`
+	ReportPath             string            `json:"report_path"`
 	// The browser timeline is bounded; totals and usage cover the entire task.
 	Events   []Event   `json:"-"`
 	Messages []Message `json:"-"`
 }
 
 func (s *Store) Report(ctx context.Context, id string) (TaskReport, error) {
-	report := TaskReport{Participants: []Participant{}, Assignments: []Assignment{}, AssignmentCounts: map[string]int{}, GeneratedAt: now(), EventCounts: map[string]int{}, Stages: []*StageSummary{}, Events: []Event{}, Messages: []Message{}, ReportPath: "/tasks/" + url.PathEscape(id) + "/report.html"}
+	report := TaskReport{Sessions: []SessionSnapshot{}, Participants: []Participant{}, Assignments: []Assignment{}, AssignmentCounts: map[string]int{}, GeneratedAt: now(), EventCounts: map[string]int{}, Stages: []*StageSummary{}, Events: []Event{}, Messages: []Message{}, ReportPath: "/tasks/" + url.PathEscape(id) + "/report.html"}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return report, err
@@ -161,6 +162,14 @@ func (s *Store) Report(ctx context.Context, id string) (TaskReport, error) {
 	report.Participants, err = participants(ctx, tx, ListParticipantsInput{TaskID: id, Limit: 200})
 	if err != nil {
 		return report, err
+	}
+	for _, participant := range report.Participants {
+		snapshot, sessionErr := sessionSnapshot(ctx, tx, SessionInput{id, participant.ID}, time.Now().UTC())
+		if sessionErr == nil {
+			report.Sessions = append(report.Sessions, snapshot)
+		} else if sessionErr != sql.ErrNoRows {
+			return report, sessionErr
+		}
 	}
 	report.Assignments, err = assignments(ctx, tx, ListAssignmentsInput{TaskID: id, Limit: 200})
 	if err != nil {

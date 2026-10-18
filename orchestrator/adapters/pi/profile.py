@@ -90,7 +90,16 @@ def load(directory: Path, config: dict, project: Path, session: Path, environmen
         raise ValueError("models.providers and mcp.mcpServers must be JSON objects")
     # Helpers and native agents must use the same service, including local port
     # overrides and optional shared-token authentication. Preserve other MCPs.
-    if "comms" not in servers or servers["comms"].get("enabled", True) is False:
+    if "comms" not in servers:
+        raise ValueError("Factory sessions require the comms MCP connection")
+    for name, server in servers.items():
+        if not isinstance(server, dict):
+            raise ValueError(f"MCP server {name}: expected an object")
+        if "headers" in server and not isinstance(server["headers"], dict):
+            raise ValueError(f"MCP server {name}: headers must be an object")
+        if "cwd" in server and (not isinstance(server["cwd"], str) or not server["cwd"]):
+            raise ValueError(f"MCP server {name}: cwd must be a nonempty string")
+    if servers["comms"].get("enabled", True) is False:
         raise ValueError("Factory sessions require the comms MCP connection")
     servers["comms"]["url"] = environment["FACTORY_COMMS_URL"]
     servers["comms"].pop("command", None)

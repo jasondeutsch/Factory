@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -178,9 +179,53 @@ func TestOneShotNotificationWithoutStoredBinding(t *testing.T) {
 	host.promptFailure = errors.New("input outcome unknown")
 	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "uncertain")
 	require.Len(t, host.prompts, 2)
+	// Push the uncertain record out of the latest-200 report window. A retry
+	// must still report its exact state rather than silently claiming success.
+	for i := range 201 {
+		message, err := store.SendMessage(t.Context(), comms.SendMessageInput{TaskID: task.ID, Sender: "coordinator", Recipient: "reviewer", Kind: "progress", Text: "fixture", RequestKey: fmt.Sprintf("history-%d", i)})
+		require.NoError(t, err)
+		input := comms.ClaimDeliveryInput{TaskID: task.ID, MessageID: message.ID, ParticipantID: participant.ID}
+		claim, err := store.ClaimDelivery(t.Context(), input)
+		require.NoError(t, err)
+		require.NotNil(t, claim.Delivery)
+		_, err = store.FinishDelivery(t.Context(), comms.FinishDeliveryInput{ClaimDeliveryInput: input, LeaseToken: claim.Delivery.LeaseToken, State: "submitted", Detail: "fixture"})
+		require.NoError(t, err)
+	}
 	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "remains uncertain")
 	assert.Len(t, host.prompts, 2, "uncertain input is not resent or reported successful")
 	require.ErrorContains(t, bridge.Notify(t.Context(), "unknown", binding), "no active participant")
 	bridge.Project = "other"
 	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "another project")
+}
+
+type observingHost struct {
+	fakeHost
+	state string
+}
+
+func (h *observingHost) Observe(context.Context, Binding) (string, error) { return h.state, nil }
+func TestContactObservedWithEmptyInbox(t *testing.T) {
+	store, err := comms.Open(filepath.Join(t.TempDir(), "contact.db"))
+	require.NoError(t, err)
+	defer store.Close()
+	server := httptest.NewServer(comms.HTTPHandler(store, "", slog.Default()))
+	defer server.Close()
+	client, err := Connect(t.Context(), server.URL+"/mcp", "")
+	require.NoError(t, err)
+	defer client.Close()
+	task, err := store.CreateTask(t.Context(), comms.CreateTaskInput{Project: "contact", Name: "test", Brief: "fixture", Owner: "owner"})
+	require.NoError(t, err)
+	binding, _ := json.Marshal(Binding{Adapter: "herdr", WorkspaceID: "w", PaneID: "p", TerminalID: "t", Name: "worker"})
+	p, err := store.RegisterParticipant(t.Context(), comms.RegisterParticipantInput{TaskID: task.ID, Role: "worker", RoutingIdentity: "worker", InstanceID: "worker", SessionRef: string(binding), RequestKey: "register"})
+	require.NoError(t, err)
+	_, err = store.RecordSession(t.Context(), comms.RecordSessionInput{TaskID: task.ID, ParticipantID: p.ID, RequestKey: "snapshot", Manifest: comms.SessionManifest{Runner: "pi", ConfigurationFingerprint: fmt.Sprintf("%064d", 0), PreparedAt: "2026-10-18T00:00:00Z"}})
+	require.NoError(t, err)
+	host := &observingHost{state: "blocked"}
+	bridge := Bridge{Client: client, Host: host, Project: task.Project}
+	require.NoError(t, bridge.Cycle(t.Context()))
+	snapshot, err := store.Session(t.Context(), comms.SessionInput{TaskID: task.ID, ParticipantID: p.ID})
+	require.NoError(t, err)
+	assert.Equal(t, "blocked", snapshot.ContactState)
+	assert.NotEmpty(t, snapshot.ExpiresAt)
+	assert.Empty(t, host.prompts)
 }

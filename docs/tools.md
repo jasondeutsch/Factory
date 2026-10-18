@@ -55,7 +55,7 @@ These commands are for agents and maintainers. Users normally request their outc
 | [scripts/factorylib.py](../orchestrator/scripts/factorylib.py) | Checks local artifact identity, publishes local JSON pointers atomically, and records events through comms. | No local mailbox or event store; service access is required for task state. |
 | [check-go.sh](../factories/golang/agents/coder_golang/scripts/check-go.sh) | Checks formatting without changing files, runs `go test ./...`, then `golangci-lint run` with supplied arguments. | Fails at the first failing step. Requires `go.mod` in the current directory and installed tools. Does not install dependencies, supply lint configuration, or explicitly run a separate `go vet ./...` command. Prefer project commands when they fit better. |
 
-`task.py` exposes `attach`, `new`, `status`, `send`, `inbox`, `ack`, `decide`, and `note`. `new` creates HTML drafts only for the Go recipe; the writing recipe starts without spec/plan documents. `send` saves first and can then attempt a Herdr notification. A failed notification leaves a valid saved message. `decide` records declared authority and optional document hashes; it does not authenticate the deciding person.
+`task.py` exposes `attach`, `new`, `status`, `send`, `inbox`, `ack`, `decide`, and `note`. `new` creates HTML drafts only for the Go recipe; the writing recipe starts without spec/plan documents. `send --notify` saves first, then uses the verified delivery bridge. Its `checked` receipt means the delivery check completed; inspect `list_deliveries` for submission, duplicate suppression, or failure. A failed notification leaves a valid saved message. `decide` records declared authority and optional document hashes; it does not authenticate the deciding person.
 
 `session.py` supports a read-only `--dry-run`, a native startup `--check`, and an ordinary interactive launch. `--loop N` additionally requires approved current HTML documents, even with `--dry-run`. It supports only the Go coder in the native Pi adapter. Each invocation prepares a new session; invoking it again is not a resume operation. Exact arguments and recovery behavior are in the [operations reference](../orchestrator/references/operations.md) and [Ralph reference](../orchestrator/references/ralph.md).
 
@@ -67,7 +67,7 @@ Every supplied role explicitly imports the shared [task-comms skill](../orchestr
 
 | Guidance | Included in |
 | --- | --- |
-| [Conventional commits](../resources/skills/conventional-commits/SKILL.md) | All configured roles, including coordinator. Guides messages and scoped authorized commits; never grants permission to commit. |
+| [Conventional commits](../resources/skills/conventional-commits/SKILL.md) | Architect, architecture reviewer, Go coder/reviewer, and pair writer. Guides messages and scoped authorized commits; never grants permission to commit. |
 | [Evidence-based debugging](../resources/skills/evidence-based-debugging/SKILL.md) | Architect, architecture reviewer, Go coder, and Go code reviewer. |
 | [Linear context](../resources/skills/linear-context/SKILL.md) | Architect, architecture reviewer, and Go code reviewer. |
 | [Bounded iteration](../resources/skills/bounded-iteration/SKILL.md) | Go coder. |

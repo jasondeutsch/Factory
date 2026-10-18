@@ -46,6 +46,9 @@ func registerTool[Input, Output any](server *mcp.Server, name, description strin
 
 func MCPServer(store *Store) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory-comms", Version: "0.1.0"}, &mcp.ServerOptions{Instructions: "Shared Factory task records. Always use an explicit project and task. Role names and evidence are declared by clients, not authenticated. Stored messages do not wake idle agents. Do not put credentials in records. Missing usage is unknown. Use structured assignments and participants for ownership and results; ordinary messages are conversation, not assignment state. This server does not execute workflows or read host artifacts."})
+	registerTool(server, "record_session", "Record an immutable prepared session manifest. Exclude credentials and raw native configuration. Declared snapshot, not proof of model activity.", false, store.RecordSession)
+	registerTool(server, "get_session", "Read a participant snapshot and expiring host contact. Expired contact is unknown, not failed work.", true, store.Session)
+	registerTool(server, "record_contact", "Host adapter observation against the current binding, expires after 30 seconds. Not progress evidence or authentication.", false, store.RecordContact)
 	registerTool(server, "create_task", "Create task metadata. Does not create host files. Reuse request_key when retrying the same request.", false, store.CreateTask)
 	registerTool(server, "list_tasks", "List a project's newest tasks. Use the last sequence as before to fetch the next page.", true, func(ctx context.Context, input ListTasksInput) (taskList, error) {
 		tasks, err := store.Tasks(ctx, input)
@@ -78,6 +81,7 @@ func MCPServer(store *Store) *mcp.Server {
 		return renderedReport{output.String(), report.ReportPath}, nil
 	})
 	registerTool(server, "register_participant", "Register one declared task-scoped agent instance and unique inbox identity. Registration does not prove availability or authenticate identity. Reuse the original request_key and instance_id on retries.", false, store.RegisterParticipant)
+	registerTool(server, "bind_participant", "Attach or clear the captured host binding for an existing instance without retiring it or changing assignments. Only that participant or declared task owner may call. Requires expected_session_ref and request_key. A different process needs explicit replacement.", false, store.BindParticipant)
 	registerTool(server, "list_participants", "List registered task participants, not live presence. Page using the last participant ID as after.", true, func(ctx context.Context, input ListParticipantsInput) (participantList, error) {
 		items, err := store.Participants(ctx, input)
 		return participantList{items}, err
@@ -91,7 +95,7 @@ func MCPServer(store *Store) *mcp.Server {
 	registerTool(server, "update_assignment", "The declared assignee accepts/declines or reports working, blocked, or needs_input. The active task owner can cancel. Requires expected_version and request_key; atomically notifies the other participant and records an event. Reading acknowledgement is separate.", false, store.UpdateAssignment)
 	registerTool(server, "submit_result", "The declared assignee submits structured outcome, artifacts, checks, limitations and next action after accepting work. Requires expected_version and request_key. Atomically notifies the orchestrator and records an event. Submission is not approval or task completion.", false, store.SubmitResult)
 
-	registerTool(server, "claim_delivery", "Delivery bridge only: reserve one unread notification for 30 seconds. A null delivery means skip. Expired claims become uncertain, never blindly resent. Does not acknowledge or accept work.", false, store.ClaimDelivery)
+	registerTool(server, "claim_delivery", "Delivery bridge only: reserve one unread notification for 30 seconds. A null delivery includes the exact skip/blocking state. Expired claims become uncertain, never blindly resent. Does not acknowledge or accept work.", false, store.ClaimDelivery)
 	registerTool(server, "finish_delivery", "Delivery bridge only: record host input submission, safe retry before input, failure, or uncertain terminal input. Requires the current lease_token. Does not change assignment state.", false, store.FinishDelivery)
 	registerTool(server, "list_deliveries", "Read the latest 200 host notification records. Submitted is not read, accepted, or completed. Failures also appear in events and the task report.", true, func(ctx context.Context, input TaskInput) (struct {
 		Deliveries []Delivery `json:"deliveries"`

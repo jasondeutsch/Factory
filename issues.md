@@ -8,7 +8,7 @@ Keep SQLite, MCP, thin `start.sh` entrypoints, native runner configuration, and 
 
 **Status:** Implemented · **Priority:** First
 
-Implemented in the comms service with seven MCP operations, transactional notifications/events, version/idempotency checks, explicit instance replacement, schema-1 upgrade, reports, and updated skills. See [coordination reference](orchestrator/comms/coordination.md). Delivery and live presence remain FACT-002/FACT-003.
+Implemented in the comms service with structured MCP operations, transactional notifications/events, version/idempotency checks, explicit instance replacement, schema-1 upgrade, reports, and updated skills. See [coordination reference](orchestrator/comms/coordination.md). Delivery and live presence remain FACT-002/FACT-003.
 
 ### Problem
 
@@ -65,9 +65,11 @@ Stored messages do not wake idle agents. Current delivery depends on active-turn
 
 ## FACT-003 — Inspectable session configuration and contact state
 
-**Status:** Proposed · **Priority:** Third · **Depends on:** FACT-001; integrate with FACT-002
+**Status:** Implemented; live contact verification pending · **Priority:** Third · **Depends on:** FACT-001; integrate with FACT-002
 
 ### Problem
+
+Implementation: immutable session snapshots, `get_session`, expiring `record_contact`, bridge observations, and task-report visibility. Fingerprints cover public instruction/model/tool selections; they exclude private native options. See [session configuration](orchestrator/README.md).
 
 A role can be configured correctly without its live session using the latest configuration. Startup checks, a running process, heartbeat contact, meaningful progress, and successful work are currently easy to confuse.
 
@@ -78,6 +80,7 @@ A role can be configured correctly without its live session using the latest con
 - Distinguish configuration prepared, startup checked, session responding, last contact, and latest assignment progress/result.
 - Add bounded contact reporting through supported host integration and explicit expiry handling. Missing contact means unavailable/unknown, not that an assignment failed or completed.
 - Expose session facts and configuration snapshots through comms queries and the report. Make changed-source versus loaded-snapshot differences inspectable.
+- Record startup failures after registration as failed contact, without silently transferring ownership. The launcher now records such failures, but registration alone can still outlive its process.
 - Preserve instance identity across runner-managed context resets where appropriate; a genuinely new process must not silently inherit another instance's ownership.
 
 ### Acceptance
@@ -89,9 +92,11 @@ A role can be configured correctly without its live session using the latest con
 
 ## FACT-004 — Coordination reliability eval with interruption and recovery
 
-**Status:** Proposed · **Priority:** Fourth · **Depends on:** FACT-001 through FACT-003
+**Status:** Automated recovery eval implemented; live Herdr eval pending · **Priority:** Fourth · **Depends on:** FACT-001 through FACT-003
 
 ### Problem
+
+Implementation: [recovery eval and live checklist](orchestrator/tests/README.md), with an automated JSON/HTML report. No live agent behavior or product verification is claimed by the fixture run.
 
 Startup and transport tests do not establish that an orchestrator-driven collaboration handles interruptions, unanswered assignments, or incomplete handoffs correctly.
 
@@ -111,3 +116,36 @@ Startup and transport tests do not establish that an orchestrator-driven collabo
 - Show that delivery, reading, acceptance, submission, review, and overall completion remain distinct.
 - Demonstrate a worker interruption and explicit orchestrator-directed recovery without duplicate work.
 - Turn observed shortcomings into specific follow-up issues; do not hide them through undocumented manual interventions.
+
+
+## FACT-005 — Deterministic dispatch to visible agent sessions
+
+**Status:** Implemented; live Herdr acceptance pending · **Priority:** Next · **Depends on:** FACT-001 and FACT-002
+
+Implementation: [dispatch and recovery](orchestrator/references/dispatch.md).
+
+The coordinator still has to correctly sequence session startup, actual participant registration, assignment creation, and notification. Instructions alone have not made this reliable: the eval required human prompting to open panes, and work was assigned to placeholder identities.
+
+Provide one host operation that starts or explicitly reuses a configured visible session, waits for its actual registration, creates the requested assignment, and notifies that participant. Return a structured receipt for each completed action and any failure. Retried dispatch must reconcile earlier actions without duplicate panes or assignments. An uncertain notification must remain visible and require inspection before retry.
+
+The orchestrator still chooses the factory, assignee, scope, and next action. This operation handles a single explicit dispatch; it introduces no scheduler or workflow language. Preserve direct human access to each agent and a manual path for unsupported hosts.
+
+**Acceptance:** A fixture test and a real Herdr eval demonstrate dispatch, startup failure, interrupted dispatch, and retry without placeholder participants or duplicate work.
+
+## FACT-006 — Recoverable task artifact attachment
+
+**Status:** Implemented · **Priority:** Next
+
+`attach_record` publishes `task.json` before rendering documents. A template or filesystem failure can leave an incomplete directory that a retry treats as already attached. Concurrent requests can also create two artifact directories for the same service task.
+
+Prepare the complete scaffold before publishing the task pointer and serialize attachment for a service task. Validate existing attachments without overwriting authored documents. Distinguish a completed local attachment from a failed comms event write so recovery preserves existing work.
+
+**Acceptance:** Failure injection during document rendering leaves no apparently complete attachment; concurrent calls return one directory; retry preserves edited documents and does not duplicate the service task.
+
+## FACT-007 — Check readiness for every configured factory member
+
+**Status:** Implemented · **Priority:** After dispatch recovery
+
+A successful coordinator check does not establish that the architect, coder, or reviewer has usable credentials, required tools, or MCP connections. Discovering those failures during a handoff interrupts the task unnecessarily.
+
+Offer a factory-wide check using the existing member startup checks. Report readiness separately for each member, with actionable failures and private diagnostic paths. Do not start model work, register participants, create tasks, print credentials, or claim that resolving credentials proves remote model access. Keep this a small extension of existing checks, not a new configuration layer.

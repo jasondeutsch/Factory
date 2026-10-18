@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import shutil
+import tempfile
 import hashlib
 import html
 import json
@@ -55,36 +58,56 @@ def attach_record(record: dict, recipe: str) -> None:
     expected_owner = factory_definition(recipe)["owner"]
     if record["owner"] != expected_owner:
         raise ValueError("task owner does not match the selected factory")
-    for pointer in (ROOT / "tasks").glob("*/task.json"):
-        metadata = json.loads(pointer.read_text(encoding="utf-8"))
-        if metadata.get("comms_id") == record["id"]:
-            if metadata.get("factory") != recipe:
-                raise ValueError("task already attached to another factory")
-            print(pointer.parent)
-            return
-    name, brief = record["name"], record["brief"]
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:64].rstrip("-") or "task"
-    now = datetime.now(timezone.utc)
-    task_id = now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond // 1000:03d}Z-{slug}"
-    path = ROOT / "tasks" / task_id
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.mkdir()
-    except FileExistsError:
-        path = path.with_name(task_id + "-" + uuid.uuid4().hex[:8])
-        path.mkdir()
-    write_json(path / "task.json", {
-        "schema_version": 2, "id": path.name, "comms_id": record["id"], "project": record["project"],
-        "name": name, "factory": recipe, "brief": brief, "owner": record["owner"], "created_at": record["created_at"],
-    })
-    (path / "reviews").mkdir()
-    if recipe == "golang":
-        for document in ("spec", "plan"):
-            template = Template((ROOT / "factories" / "golang" / "templates" / f"{document}.html").read_text(encoding="utf-8"))
-            (path / f"{document}.html").write_text(
-                template.substitute(title=html.escape(name), brief=html.escape(brief)), encoding="utf-8"
-            )
-    event(path, "artifacts_attached", record["owner"], artifact_dir=str(path), factory=recipe)
+    directory = ROOT / "tasks"
+    directory.mkdir(parents=True, exist_ok=True)
+    # flock is released on process exit, including interruption. Keep its inode
+    # stable: unlinking a lock file would allow two independent locks.
+    with (directory / ".attach.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = None
+        for pointer in directory.glob("*/task.json"):
+            if pointer.parent.name.startswith("."):
+                continue  # Unpublished staging from an interrupted process.
+            _, metadata = read_task(str(pointer.parent))
+            if metadata["comms_id"] == record["id"]:
+                if metadata["factory"] != recipe:
+                    raise ValueError("task already attached to another factory")
+                path = pointer.parent
+                required = ["spec.html", "plan.html"] if recipe == "golang" else []
+                if not (path / "reviews").is_dir() or any(not (path / name).is_file() for name in required):
+                    raise ValueError(f"incomplete existing attachment at {path}; restore missing documents before retrying")
+                break
+        if path is None:
+            name, brief = record["name"], record["brief"]
+            slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:64].rstrip("-") or "task"
+            now = datetime.now(timezone.utc)
+            task_id = now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond // 1000:03d}Z-{slug}"
+            path = directory / task_id
+            if path.exists():
+                path = path.with_name(task_id + "-" + uuid.uuid4().hex[:8])
+            staging = Path(tempfile.mkdtemp(prefix=".attaching-", dir=directory))
+            try:
+                (staging / "reviews").mkdir()
+                if recipe == "golang":
+                    for document in ("spec", "plan"):
+                        template = Template((ROOT / "factories" / "golang" / "templates" / f"{document}.html").read_text(encoding="utf-8"))
+                        (staging / f"{document}.html").write_text(
+                            template.substitute(title=html.escape(name), brief=html.escape(brief)), encoding="utf-8")
+                write_json(staging / "task.json", {
+                    "schema_version": 2, "id": path.name, "comms_id": record["id"], "project": record["project"],
+                    "name": name, "factory": recipe, "brief": brief, "owner": record["owner"], "created_at": record["created_at"],
+                })
+                staging.rename(path)
+            finally:
+                if staging.exists():
+                    shutil.rmtree(staging)
+        # Retry the same evidence write if publication succeeded but comms failed.
+        try:
+            Client().call("record_event", task_id=record["id"], actor=record["owner"], kind="note",
+                          message="artifacts_attached", data={"event_type": "artifacts_attached", "artifact_dir": str(path), "factory": recipe},
+                          request_key="artifacts-" + hashlib.sha256(str(path).encode()).hexdigest())
+        except (ValueError, OSError) as error:
+            raise ValueError(f"artifacts are saved at {path}; retry attach to record their location in comms") from error
     print(path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path)
 
 
@@ -119,22 +142,21 @@ def send(args: argparse.Namespace) -> None:
         try:
             if os.environ.get("HERDR_ENV") != "1":
                 raise ValueError("notifications must be sent from inside a Herdr pane (HERDR_ENV=1)")
-            notice = (
-                f"Factory message {record['id']} from {sender} to {recipient}. "
-                f"Task: {task}. Check your durable inbox and acknowledge after reading."
-            )
             result = subprocess.run(
-                ["herdr", "agent", "prompt", args.notify, notice],
-                capture_output=True, text=True, timeout=20, check=False,
+                [str(ROOT / "orchestrator/start-delivery.sh"), "--project", metadata["project"],
+                 "--task", metadata["comms_id"], "--notify", recipient, "--agent", args.notify],
+                capture_output=True, text=True, timeout=60, check=False,
             )
             if result.returncode:
                 raise ValueError(result.stderr.strip() or result.stdout.strip() or "Herdr notification failed")
-            receipt["notification"] = "submitted"
+            # A successful cycle can mean the message was already delivered or
+            # acknowledged. Do not manufacture another submission receipt.
+            receipt["notification"] = "checked"
         except (OSError, ValueError, subprocess.TimeoutExpired) as error:
             event(task, "notification", sender, message_id=record["id"], target=args.notify, outcome="failed")
             print_json(receipt)
             raise ValueError(f"message is saved as {record['id']}; notification failed: {error}") from error
-        event(task, "notification", sender, message_id=record["id"], target=args.notify, outcome="submitted")
+        event(task, "notification", sender, message_id=record["id"], target=args.notify, outcome="checked")
     print_json(receipt)
 
 
@@ -232,7 +254,7 @@ def main() -> int:
         args = parser().parse_args()
         args.run(args)
         return 0
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, KeyError) as error:
         print(f"factory: {error}", file=sys.stderr)
         return 1
 

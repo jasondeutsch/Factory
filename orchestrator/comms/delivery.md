@@ -6,19 +6,19 @@ The optional host bridge polls comms through the official Go MCP client and subm
 
 Ask your coordinating agent:
 
-> Enable automatic inbox delivery for this task's existing Herdr agents. Capture their actual session bindings, register those references, and start the delivery bridge in a separate visible pane. Keep human approvals with me.
+> Enable automatic inbox delivery for this task's existing Herdr agents. Capture their actual session bindings, attach those references to their existing participants, and start the delivery bridge in a separate visible pane. Keep human approvals with me.
 
 The coordinator must itself run inside Herdr (`HERDR_ENV=1`). This is a host process, not another Compose service: it needs the local Herdr CLI/socket and Go 1.26 or a locally built `cmd/bridge` binary. Comms must already be running with the updated service image. Restart/rebuild that image after updating the source; do not discard a volume containing needed history.
 
-Before participant registration, name and inspect each actual agent using the [Herdr adapter](../adapters/herdr/README.md). Capture its reference from inside Herdr:
+After a session starts, name and inspect the actual agent using the [Herdr adapter](../adapters/herdr/README.md). Capture its reference from inside Herdr:
 
 ```bash
 .factory/orchestrator/start-delivery.sh --bind account-architect
 ```
 
-This prints one JSON object with `adapter`, `workspace_id`, `pane_id`, `terminal_id`, and `name`. Pass the **serialized object as the `session_ref` string** in `register_participant`; retain the agent's own `FACTORY_INSTANCE_ID`. Record the coordinator's binding too, so replies can wake it. Never copy example IDs or register the bridge as the worker. An empty reference intentionally selects manual delivery. A nonempty legacy plain name is insufficient and produces a visible delivery error.
+This prints one JSON object with `adapter`, `workspace_id`, `pane_id`, `terminal_id`, and `name`. Pass the **serialized object as the `session_ref` string** in `bind_participant`, using its existing participant ID, the caller's participant ID, its current `session_ref` as `expected_session_ref` (initially empty), and a stable request key. The participant itself or task owner may bind it. Record the coordinator's binding too, so replies can wake it. Never copy example IDs or register the bridge as the worker. An empty reference intentionally selects manual delivery. A nonempty legacy plain name is insufficient and produces a visible delivery error.
 
-Bindings are immutable participant registration data. For a participant already registered without a binding, prepare an explicit replacement with the correct instance/session identity; do not change an idempotency key to silently mutate registration. Existing assignments remain bound to the old participant: cancel/reissue them explicitly if needed. Prefer capturing bindings before creating assignments. This bridge does not automate replacement or ownership transfer.
+Binding the same running instance preserves its participant ID and assignments. A stale expected reference is rejected; reread and reconcile before changing it. An empty new reference disables background delivery. A genuinely new process still requires explicit participant replacement and assignment recovery. Captured host references are client declarations, not authenticated process identity.
 
 Start in a dedicated Herdr pane, with the **exact project identifier stored in comms**, usually the application root:
 
@@ -66,7 +66,7 @@ Automated Go tests exercise the actual MCP HTTP transport, store, assignment/rep
 
 For a live smoke test **inside Herdr**, use dedicated coordinator and worker sessions connected to an isolated task:
 
-1. Capture and register both bindings; start the bridge for that task only.
+1. Capture and attach both bindings; start the bridge for that task only.
 2. With both agents idle, have the coordinator create one small assignment through MCP. Confirm the worker receives a hint, reads/acknowledges it, and explicitly accepts.
 3. Have the worker submit its result. Confirm a notification reaches the idle coordinator and it reads the canonical result. No human inbox prompt should be needed.
 4. Restart the bridge. Confirm no duplicate input or assignment appears. Confirm submitted/read/accepted/result are separate facts in the report.
@@ -74,4 +74,10 @@ For a live smoke test **inside Herdr**, use dedicated coordinator and worker ses
 
 ## One-shot handoffs
 
-Task-bound launchers register their real instances automatically without a stored host binding. Use the [one-shot Herdr notification](../adapters/herdr/README.md#one-shot-inbox-notification) for these sessions when no bound background integration exists. It captures the current binding for that notification and records delivery without retiring or re-registering a participant. This avoids replacing an already assigned instance just to send a hint. It does not establish continuous polling; each sender must invoke it after saving a handoff.
+Task-bound launchers register their real instances automatically without a stored host binding. Use the [one-shot Herdr notification](../adapters/herdr/README.md#one-shot-inbox-notification) for these sessions when no bound background integration exists. It captures the current binding for that notification and records delivery without retiring or re-registering a participant. This avoids replacing an already assigned instance just to send a hint. It does not establish continuous polling; each sender must invoke it after saving a handoff. Attach a binding with `bind_participant` and start the polling bridge when continuous delivery is wanted.
+
+A null `claim_delivery.delivery` includes the exact `state` and optional `detail` explaining why no claim was issued. One-shot checks use that response, not the report’s latest-200 delivery window. Rebuild the comms service when updating the bridge and server together.
+
+## Contact observations
+
+The background bridge also samples bound sessions when their inbox is empty. For sessions with a recorded launcher manifest, it records `idle`, `working`, `blocked`, `unknown`, or `unavailable` through `record_contact`. These observations expire after 30 seconds; stopped bridges cannot leave a participant indefinitely marked reachable. Contact is independent of assignment progress and does not invoke a model. Check the session snapshot in the task report or through `get_session`.

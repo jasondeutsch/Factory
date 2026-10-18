@@ -28,6 +28,8 @@ type ClaimDeliveryInput struct {
 }
 type DeliveryClaim struct {
 	Delivery *Delivery `json:"delivery"`
+	State    string    `json:"state"`
+	Detail   string    `json:"detail,omitempty"`
 }
 type FinishDeliveryInput struct {
 	ClaimDeliveryInput
@@ -74,6 +76,7 @@ func (s *Store) claimDeliveryAt(ctx context.Context, in ClaimDeliveryInput, at t
 		return out, errors.New("message is addressed to a different participant inbox")
 	}
 	if message.AcknowledgedAt != nil {
+		out.State = "acknowledged"
 		return out, nil
 	}
 	// Do not deliver old assignment offers to a replacement sharing its inbox.
@@ -83,6 +86,7 @@ func (s *Store) claimDeliveryAt(ctx context.Context, in ClaimDeliveryInput, at t
 			return out, err
 		}
 		if assignment.Assignee != participant.ID || oneOf(assignment.State, "submitted", "declined", "cancelled") {
+			out.State = "ineligible"
 			return out, nil
 		}
 	}
@@ -123,6 +127,8 @@ func (s *Store) claimDeliveryAt(ctx context.Context, in ClaimDeliveryInput, at t
 		return out, err
 	}
 	if active > 0 {
+		out.State = "claimed"
+		out.Detail = "Another delivery claim for this participant is still active"
 		return out, tx.Commit()
 	}
 	d, err := scanDelivery(tx.QueryRowContext(ctx, "SELECT "+deliveryColumns+" FROM deliveries WHERE task_id=? AND message_id=? AND participant_id=?", in.TaskID, in.MessageID, in.ParticipantID))
@@ -130,6 +136,7 @@ func (s *Store) claimDeliveryAt(ctx context.Context, in ClaimDeliveryInput, at t
 		return out, err
 	}
 	if err == nil && (d.State != "retry" || d.RetryAt > at.Unix()) {
+		out.State, out.Detail = d.State, d.Detail
 		return out, tx.Commit()
 	}
 	if errors.Is(err, sql.ErrNoRows) {
@@ -144,6 +151,7 @@ func (s *Store) claimDeliveryAt(ctx context.Context, in ClaimDeliveryInput, at t
 		return out, err
 	}
 	out.Delivery = &d
+	out.State = d.State
 	return out, tx.Commit()
 }
 func saveDelivery(ctx context.Context, tx *sql.Tx, d Delivery) error {

@@ -16,7 +16,7 @@ import unittest
 from unittest.mock import Mock, patch
 from pathlib import Path
 
-from comms_fixture import CommsService
+from comms_fixture import CommsService, bridge_binary
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -99,6 +99,135 @@ class ToolboxTest(unittest.TestCase):
         env = {**self.env, "PATH": str(binaries) + os.pathsep + os.environ.get("PATH", ""), "CAPTURE": str(capture)}
         return capture, env
 
+    def test_attachment_failure_concurrency_and_retry_preserve_documents(self):
+        import sys
+        sys.path.insert(0, str(SOURCE / "orchestrator/comms"))
+        from client import Client
+        client = Client(self.env)
+        record = client.call("create_task", project=str(self.project), owner="coordinator", name="Atomic", brief="Small")
+        template = self.toolbox / "factories/golang/templates/plan.html"
+        original = template.read_text()
+        template.write_text("$missing_variable")
+        failed = self.task_command("attach", record["id"], "--factory", "golang", expected=1)
+        self.assertFalse(any(json.loads(p.read_text())["comms_id"] == record["id"] for p in (self.toolbox / "tasks").glob("*/task.json")))
+        template.write_text(original)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: self.task_command("attach", record["id"], "--factory", "golang").stdout.strip(), range(2)))
+        self.assertEqual(results[0], results[1])
+        path = Path(results[0])
+        if not path.is_absolute(): path = self.project / path
+        (path / "spec.html").write_text("Authored content")
+        self.task_command("attach", record["id"], "--factory", "golang")
+        self.assertEqual((path / "spec.html").read_text(), "Authored content")
+        events = [event for event in client.events(record["id"]) if (event.get("data") or {}).get("event_type") == "artifacts_attached"]
+        self.assertEqual(len(events), 1)
+
+    def test_factory_check_reports_all_members_without_registering_or_chat(self):
+        capture, env = self.fake_pi()
+        report = json.loads(self.command("orchestrator/session.py", "--check-factory", "--factory", "golang", env=env).stdout)
+        self.assertTrue(report["ready"])
+        self.assertEqual(len(report["members"]), 5)
+        self.assertFalse(capture.exists())
+        for member in report["members"]:
+            self.assertTrue(Path(member["diagnostics"]).exists())
+        definition = self.toolbox / "factories/golang/factory.json"
+        config = json.loads(definition.read_text())
+        config["agents"][-1].setdefault("config", {})["executable"] = "missing-factory-runner"
+        definition.write_text(json.dumps(config))
+        report = json.loads(self.command("orchestrator/session.py", "--check-factory", "--factory", "golang", env=env, expected=1).stdout)
+        self.assertFalse(report["ready"])
+        self.assertEqual(sum(member["ready"] for member in report["members"]), 4)
+
+    def test_launcher_records_immutable_public_snapshot(self):
+        capture, env = self.fake_pi()
+        self.command("orchestrator/session.py", "architect", self.task, env=env)
+        sys.path.insert(0, str(SOURCE / "orchestrator/comms"))
+        from client import Client
+        client = Client(env)
+        task_id = json.loads((self.task / "task.json").read_text())["comms_id"]
+        participant = client.call("list_participants", task_id=task_id)["participants"][0]
+        snapshot = client.call("get_session", task_id=task_id, participant_id=participant["id"])
+        self.assertTrue(snapshot["manifest"]["startup_checked"])
+        self.assertEqual(snapshot["contact_state"], "unknown")
+        original = snapshot["manifest"]["skills"][0]["sha256"]
+        (self.toolbox / "resources/agents/architect/agent.md").write_text("changed after launch")
+        again = client.call("get_session", task_id=task_id, participant_id=participant["id"])
+        self.assertEqual(original, again["manifest"]["skills"][0]["sha256"])
+
+    def dispatch_fixture(self):
+        capture, env = self.fake_pi()
+        binary = self.project / "bin/herdr"
+        binary.write_text("#!" + sys.executable + "\n" + (SOURCE / "orchestrator/tests/fixtures/herdr.py").read_text().split("\n", 1)[1])
+        binary.chmod(0o755)
+        root = self.project / "host-fixture"
+        root.mkdir()
+        env.update(HERDR_ENV="1", HOST_FIXTURE=str(root))
+        bridge = self.toolbox / "orchestrator/start-delivery.sh"
+        import shlex
+        bridge.write_text("#!/bin/sh\nexec " + shlex.quote(str(bridge_binary())) + ' "$@"\n')
+        sys.path.insert(0, str(SOURCE / "orchestrator/comms"))
+        from client import Client
+        client = Client(env)
+        task_id = json.loads((self.task / "task.json").read_text())["comms_id"]
+        owner = client.call("register_participant", task_id=task_id, role="coordinator", routing_identity="coordinator", instance_id="owner", request_key="owner")
+        request = self.project / "assignment.json"
+        request.write_text(json.dumps({"role":"architect", "title":"Draft", "instructions":"Draft approved scope", "expected_output":["spec.html"], "stage":"design", "attempt":1}))
+        arguments = [self.task, "--request", request, "--key", "dispatch-1", "--owner", owner["id"], "--timeout", "1"]
+        return env, root, client, task_id, arguments
+
+    def test_dispatch_retry_creates_one_pane_assignment_and_notification(self):
+        env, root, client, task_id, args = self.dispatch_fixture()
+        first = json.loads(self.command("orchestrator/dispatch.py", *args, env=env).stdout)
+        second = json.loads(self.command("orchestrator/dispatch.py", *args, env=env).stdout)
+        self.assertEqual(first["assignment_id"], second["assignment_id"])
+        calls = [json.loads(line)[:2] for line in (root / "calls.jsonl").read_text().splitlines()]
+        for command in (["pane","split"], ["pane","run"], ["agent","prompt"]):
+            self.assertEqual(calls.count(command), 1)
+        assignments = client.call("list_assignments", task_id=task_id)["assignments"]
+        self.assertEqual(len(assignments), 1)
+        self.assertEqual(assignments[0]["state"], "offered")
+        request = self.project / "assignment.json"
+        data = json.loads(request.read_text()); data["instructions"] = "different"; request.write_text(json.dumps(data))
+        self.assertIn("different arguments", self.command("orchestrator/dispatch.py", *args, env=env, expected=1).stderr)
+
+    def test_dispatch_uncertain_launch_reconciles_actual_participant(self):
+        env, root, client, task_id, args = self.dispatch_fixture()
+        failed = json.loads(self.command("orchestrator/dispatch.py", *args, env={**env,"UNCERTAIN_LAUNCH":"1"}, expected=1).stdout)
+        self.assertEqual(failed["phase"], "launch_pending")
+        resumed = json.loads(self.command("orchestrator/dispatch.py", *args, env=env).stdout)
+        self.assertEqual(resumed["phase"], "notification_checked")
+        calls = [json.loads(line)[:2] for line in (root / "calls.jsonl").read_text().splitlines()]
+        self.assertEqual(calls.count(["pane","run"]), 1)
+
+    def test_dispatch_uncertain_notification_and_failed_start_are_not_repeated(self):
+        env, root, client, task_id, args = self.dispatch_fixture()
+        first = json.loads(self.command("orchestrator/dispatch.py", *args, env={**env,"UNCERTAIN_PROMPT":"1"}, expected=1).stdout)
+        self.assertEqual(first["phase"], "assigned")
+        self.command("orchestrator/dispatch.py", *args, env=env, expected=1)
+        calls = [json.loads(line)[:2] for line in (root / "calls.jsonl").read_text().splitlines()]
+        self.assertEqual(calls.count(["agent","prompt"]), 1)
+        self.assertEqual(len(client.call("list_assignments",task_id=task_id)["assignments"]), 1)
+
+    def test_dispatch_uncertain_split_requires_explicit_recovery(self):
+        env, root, client, task_id, args = self.dispatch_fixture()
+        first = json.loads(self.command("orchestrator/dispatch.py", *args, env={**env,"UNCERTAIN_SPLIT":"1"}, expected=1).stdout)
+        self.assertEqual(first["phase"], "split_pending")
+        self.command("orchestrator/dispatch.py", *args, env=env, expected=1)
+        recovered = json.loads(self.command("orchestrator/dispatch.py", *args, "--recover-pane", "fixture-pane", env=env).stdout)
+        self.assertEqual(recovered["phase"], "notification_checked")
+        calls = [json.loads(line)[:2] for line in (root / "calls.jsonl").read_text().splitlines()]
+        self.assertEqual(calls.count(["pane","split"]), 1)
+        self.assertEqual(calls.count(["pane","run"]), 1)
+
+    def test_dispatch_startup_failure_never_assigns_or_relaunches(self):
+        env, root, client, task_id, args = self.dispatch_fixture()
+        self.command("orchestrator/dispatch.py", *args, env={**env,"FAIL_CHECK":"credentials"}, expected=1)
+        resumed = json.loads(self.command("orchestrator/dispatch.py", *args, env=env, expected=1).stdout)
+        self.assertIn("no actual participant", resumed["error"])
+        calls = [json.loads(line)[:2] for line in (root / "calls.jsonl").read_text().splitlines()]
+        self.assertEqual(calls.count(["pane","run"]), 1)
+        self.assertEqual(client.call("list_assignments",task_id=task_id)["assignments"], [])
+
     def test_task_location_name_resolution_and_html_escaping(self):
         self.assertEqual(self.task.parent, self.toolbox / "tasks")
         self.assertRegex(self.task.name, r"^\d{8}T\d{9}Z-mixed-case-task")
@@ -167,11 +296,11 @@ class ToolboxTest(unittest.TestCase):
         self.assertEqual(receipt["notification"], "failed")
         self.assertEqual(len(json.loads(self.task_command("inbox", self.task, "--for", "coordinator").stdout)), 1)
 
-    def test_herdr_notification_uses_argv_not_shell(self):
+    def test_notification_delegates_to_verified_bridge_with_argv(self):
         binaries = self.project / "bin"
         binaries.mkdir()
         capture = self.project / "notification.json"
-        fake = binaries / "herdr"
+        fake = self.toolbox / "orchestrator/start-delivery.sh"
         fake.write_text(
             f"#!{sys.executable}\nimport json, os, sys\n"
             "open(os.environ['CAPTURE'], 'w').write(json.dumps(sys.argv[1:]))\n"
@@ -184,8 +313,9 @@ class ToolboxTest(unittest.TestCase):
             "--kind", "result", "--text", "Ready", "--notify", target, env=env,
         )
         argv = json.loads(capture.read_text())
-        self.assertEqual(argv[:3], ["agent", "prompt", target])
-        self.assertEqual(json.loads(result.stdout)["notification"], "submitted")
+        self.assertEqual(argv[-4:], ["--notify", "coordinator", "--agent", target])
+        self.assertEqual(argv[:2], ["--project", str(self.project)])
+        self.assertEqual(json.loads(result.stdout)["notification"], "checked")
         self.assertFalse((self.project / "BAD").exists())
 
     def test_decision_records_exact_document_versions(self):
@@ -309,6 +439,34 @@ class ToolboxTest(unittest.TestCase):
                               env={**env, "MISSING_RALPH": "1"})
         self.assertIn("command(s) unavailable", result.stderr)
         self.assertFalse(capture.exists())
+
+    def test_loop_rechecks_documents_after_wait_and_records_registered_failure(self):
+        capture, env = self.fake_pi()
+        self.task_command("decide", self.task, "--by", "human", "--outcome", "approve", "--artifact", "spec.html", "--artifact", "plan.html", "--text", "Approved")
+        sys.path.insert(0, str(self.toolbox / "orchestrator/comms"))
+        from client import Client
+        client = Client(self.env)
+        task_id = json.loads((self.task / "task.json").read_text())["comms_id"]
+        owner = client.call("register_participant", task_id=task_id, instance_id="actual-owner", role="coordinator", routing_identity="coordinator", request_key="owner")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            launch = executor.submit(self.command, "orchestrator/session.py", "coder_golang", self.task, "--loop", "3", env=env, expected=1)
+            deadline = time.monotonic() + 5
+            worker = None
+            while time.monotonic() < deadline:
+                workers = [p for p in client.call("list_participants", task_id=task_id)["participants"] if p["role"] == "coder_golang"]
+                if workers:
+                    worker = workers[0]
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(worker)
+            (self.task / "plan.html").write_text("Changed while launcher waited for an assignment")
+            client.call("create_assignment", task_id=task_id, assigning_participant_id=owner["id"], assignee_id=worker["id"], title="Fixture build", instructions="Fixture only", expected_output=["fixture result"], stage="build", attempt=1, request_key="build")
+            result = launch.result(timeout=10)
+        self.assertIn("approval of the current plan.html", result.stderr)
+        self.assertFalse(capture.exists(), "changed approvals must prevent model launch")
+        failures = [event for event in client.events(task_id) if event["kind"] == "failure"]
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]["data"]["participant_id"], worker["id"])
 
     def test_linear_is_optional_and_credentials_stay_private(self):
         capture, env = self.fake_pi()
@@ -648,15 +806,64 @@ class ToolboxTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         client = Mock()
-        client.call.side_effect = [{"assignments": []}, {"assignments": [{"state": "offered"}]}]
+        client.call.side_effect = [{"status": "working"}, {"assignments": []}, {"status": "working"}, {"assignments": [{"state": "offered"}]}]
         with patch.object(module.time, "sleep"):
             module.wait_for_assignment(client, "task-id", "actual-participant", 10)
-        self.assertEqual(client.call.call_count, 2)
-        client.call.assert_called_with("list_assignments", task_id="task-id", assignee_id="actual-participant", limit=200)
-        client.call.side_effect = None
-        client.call.return_value = {"assignments": [{"state": "submitted"}]}
+        self.assertEqual(client.call.call_count, 4)
+        client.call.assert_called_with("list_assignments", task_id="task-id", assignee_id="actual-participant", after="", limit=200)
+        client.call.side_effect = [{"status": "working"}, {"assignments": [{"state": "submitted"}]}]
         with self.assertRaisesRegex(ValueError, "no active assignment"):
             module.wait_for_assignment(client, "task-id", "actual-participant", 0)
+
+    def test_loop_finds_later_assignments_and_stops_on_cancellation(self):
+        sys.path.insert(0, str(SOURCE / "orchestrator"))
+        spec = importlib.util.spec_from_file_location("loop_paging_fixture", SOURCE / "orchestrator/session.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        client = Mock()
+        first_page = [{"id": str(i), "state": "submitted"} for i in range(200)]
+        client.call.side_effect = [{"status": "working"}, {"assignments": first_page},
+                                   {"assignments": [{"id": "200", "state": "offered"}]}]
+        module.wait_for_assignment(client, "task-id", "participant", 0)
+        client.call.assert_called_with("list_assignments", task_id="task-id", assignee_id="participant", after="199", limit=200)
+        client.reset_mock()
+        client.call.side_effect = [{"status": "cancelled"}]
+        with self.assertRaisesRegex(ValueError, "cancelled"):
+            module.wait_for_assignment(client, "task-id", "participant", 10)
+        client.call.assert_called_once_with("get_task", task_id="task-id")
+
+    def test_factory_native_secrets_are_not_copied_into_model_instructions(self):
+        path = self.toolbox / "factories/golang/factory.json"
+        definition = json.loads(path.read_text())
+        for member in definition["agents"]:
+            member["config"] = {"pi": {"models": {"providers": {"private": {"apiKey": "SECRET-PROVIDER-SENTINEL"}}},
+                                      "mcp": {"mcpServers": {"private": {"enabled": False, "headers": {"Authorization": "SECRET-MCP-SENTINEL"}}}}}}
+        path.write_text(json.dumps(definition))
+        dry = self.command("orchestrator/session.py", "architect", self.task, "--dry-run")
+        self.assertNotIn("SECRET-", dry.stdout)
+        self.assertIn('"name": "code_reviewer_golang"', json.loads(dry.stdout)["instructions"])
+        capture, env = self.fake_pi()
+        self.command("orchestrator/session.py", "architect", self.task, env=env)
+        record = json.loads(capture.read_text())
+        self.assertNotIn("SECRET-", record["instructions"])
+        native = Path(record["private_config"])
+        self.assertEqual(json.loads((native / "models.json").read_text())["providers"]["private"]["apiKey"], "SECRET-PROVIDER-SENTINEL")
+
+    def test_malformed_task_and_mcp_config_report_errors_without_tracebacks(self):
+        task_path = self.task / "task.json"
+        original = task_path.read_text()
+        for value in ([], {"schema_version": 2}, {**json.loads(original), "brief": None}):
+            task_path.write_text(json.dumps(value))
+            result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", expected=1)
+            self.assertIn("task.json", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+        task_path.write_text(original)
+        overlay = self.toolbox / "resources/agents/architect/pi/mcp.local.json"
+        for value in ([], None, {"headers": []}, {"cwd": 42}):
+            overlay.write_text(json.dumps({"mcpServers": {"comms": value}}))
+            result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", expected=1)
+            self.assertIn("MCP server comms", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
 
     def test_task_launch_registers_real_instance_and_refuses_silent_replacement(self):
         capture, env = self.fake_pi()
