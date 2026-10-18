@@ -1,6 +1,6 @@
 # Orchestration foundation
 
-This directory owns the reusable coordination mechanics. Its [comms MCP server](comms/README.md) stores task and assignment state, messages, evidence, usage, and reports. The optional [delivery bridge](comms/delivery.md) submits inbox notifications. `session.py`, `adapters/`, and `scripts/` prepare native sessions and support local task artifacts.
+This directory owns the reusable coordination mechanics. Its [comms MCP server](comms/README.md) stores task and assignment state, messages, evidence, usage, and reports. The [delivery bridge](comms/delivery.md) submits inbox notifications, either continuously with stored bindings or through the [one-shot Herdr operation](adapters/herdr/README.md#one-shot-inbox-notification). `session.py`, `adapters/`, and `scripts/` prepare native sessions and support local task artifacts.
 
 Specific factory definitions live under [factories](../factories/README.md); reusable agents and skills live under [resources](../resources/README.md). Those files define the work and its review policy. The coordination protocol does not prescribe Go development or writing. The current launcher still includes a Pi/Ralph-specific `--loop` helper for the supplied Go recipe; runner support is not universal.
 
@@ -39,6 +39,8 @@ Reliable startup follows one path:
 An unassigned session receives role and project identity, not inherited task variables from another session. After establishing an assignment, the agent retains the selected task ID, documents, and recipe through comms and conversation. An explicitly bound session receives those in instructions and environment. `--loop` without a task is rejected.
 
 The dry-run result lists loaded skill files, profile source, enabled MCPs, and selected model/thinking without credential values. A regular dry run is offline; a loop dry run reads approval events. `--check` uses real native startup checks and may contact services or install the declared extension, but does not call a model. It is evidence of current configuration readiness, not a guarantee that future inference succeeds. Custom command adapters still need runner-specific MCP setup.
+
+Task-bound live launches register the actual session instance in comms after startup checks and include its participant ID in instructions and `FACTORY_PARTICIPANT_ID`. `--check` and `--dry-run` do not register participants. Coordinators must discover this registration before assigning work, rather than pre-registering placeholders. Duplicate routing identities fail startup; use a distinct `--routing-identity` for an additional instance, or explicitly retire a prior instance with `--replace-participant <id>`. Replacement does not transfer its assignments. An unassigned coordinator registers its actual instance after selecting a task.
 
 ## Bundle layout
 
@@ -220,7 +222,7 @@ Ask the coordinator to resume a named task. It finds the project-scoped service 
 
 The coder's native settings declare the pinned `edxeth/pi-ralph-loop` package. Pi can install that declared dependency in the private profile; normal launcher credential/MCP checks do not load extensions. For a bounded coder launch, `session.py coder_golang <task-path> --loop 5` additionally loads the real runtime and checks Ralph command registration without sending a model prompt, then starts the loop in the interactive pane. This extra check can download the declared package and needs Git/network access unless a local source is configured. Its process timeout uses `check_timeout_seconds` too.
 
-The loop checks current HTML document approvals at launch and uses the shared bounded-iteration skill. The plugin's root `.ralph/` state permits one active loop per workspace. Progress stays with the task, and replacement session transcripts stay private. See the [Ralph reference](references/ralph.md) for assignment, visibility, stop/resume behavior, and limits. This adds no Factory loop engine or automatic commit behavior.
+After registration, a loop launch waits up to `check_timeout_seconds` for an offered, accepted, or working assignment to its actual participant. The coordinator creates that assignment during the wait; timeout prevents unassigned implementation. The loop checks current HTML document approvals at launch and uses the shared bounded-iteration skill. The plugin's root `.ralph/` state permits one active loop per workspace. Progress stays with the task, and replacement session transcripts stay private. See the [Ralph reference](references/ralph.md) for assignment, visibility, stop/resume behavior, and limits. This adds no Factory loop engine or automatic commit behavior.
 
 ## Other agent CLIs
 

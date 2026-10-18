@@ -83,7 +83,60 @@ func (b Bridge) task(ctx context.Context, task comms.Task) error {
 		after = page.Participants[len(page.Participants)-1].ID
 	}
 }
+
+// Notify captures a live binding for a one-shot handoff without changing identity.
+// The same delivery claims as the polling bridge prevent duplicate submissions.
+func (b Bridge) Notify(ctx context.Context, recipient string, binding Binding) error {
+	if err := binding.Validate(); err != nil {
+		return err
+	}
+	if b.TaskID == "" || b.Project == "" || recipient == "" {
+		return errors.New("notification requires project, task and recipient")
+	}
+	var task comms.Task
+	if err := b.Client.Call(ctx, "get_task", comms.TaskInput{TaskID: b.TaskID}, &task); err != nil {
+		return err
+	}
+	if task.Project != b.Project {
+		return errors.New("task belongs to another project")
+	}
+	var after string
+	for {
+		var page struct {
+			Participants []comms.Participant `json:"participants"`
+		}
+		if err := b.Client.Call(ctx, "list_participants", comms.ListParticipantsInput{TaskID: task.ID, After: after, Limit: 200}, &page); err != nil {
+			return err
+		}
+		for _, p := range page.Participants {
+			if p.RetiredAt == nil && p.RoutingIdentity == recipient {
+				ready, err := b.Host.Ready(ctx, binding)
+				if err != nil {
+					return err
+				}
+				if !ready {
+					return errors.New("recipient is busy, blocked or not ready; no input submitted")
+				}
+				data, err := json.Marshal(binding)
+				if err != nil {
+					return err
+				}
+				p.SessionRef = string(data)
+				return b.deliverInbox(ctx, p, true)
+			}
+		}
+		if len(page.Participants) < 200 {
+			return errors.New("no active participant for recipient")
+		}
+		after = page.Participants[len(page.Participants)-1].ID
+	}
+}
+
 func (b Bridge) inbox(ctx context.Context, p comms.Participant) error {
+	return b.deliverInbox(ctx, p, false)
+}
+
+func (b Bridge) deliverInbox(ctx context.Context, p comms.Participant, strict bool) error {
 	if p.SessionRef == "" {
 		return nil
 	} // Explicit manual mode.
@@ -111,6 +164,9 @@ func (b Bridge) inbox(ctx context.Context, p comms.Participant) error {
 		}
 		// Busy/blocked/unknown is not a failure and must never trigger input.
 		if bindingErr == nil && !ready {
+			if strict {
+				return errors.New("recipient is no longer ready; no input submitted")
+			}
 			return nil
 		}
 		for _, message := range page.Messages {
@@ -120,6 +176,19 @@ func (b Bridge) inbox(ctx context.Context, p comms.Participant) error {
 				return err
 			}
 			if claim.Delivery == nil {
+				if strict {
+					var history struct {
+						Deliveries []comms.Delivery `json:"deliveries"`
+					}
+					if err := b.Client.Call(ctx, "list_deliveries", comms.TaskInput{TaskID: p.TaskID}, &history); err != nil {
+						return err
+					}
+					for _, prior := range history.Deliveries {
+						if prior.ParticipantID == p.ID && prior.MessageID == message.ID && prior.State != "submitted" {
+							return fmt.Errorf("notification remains %s: %s; inspect before retrying", prior.State, prior.Detail)
+						}
+					}
+				}
 				continue
 			}
 			finish := comms.FinishDeliveryInput{ClaimDeliveryInput: claimInput, LeaseToken: claim.Delivery.LeaseToken, State: "submitted", Detail: "Herdr accepted inbox notification input; reading and assignment acceptance are still pending"}
@@ -150,6 +219,9 @@ func (b Bridge) inbox(ctx context.Context, p comms.Participant) error {
 			}
 			if b.Logger != nil {
 				b.Logger.Info("inbox notification", "task", p.TaskID, "participant", p.ID, "message", message.ID, "state", result.State, "detail", result.Detail)
+			}
+			if strict && result.State != "submitted" {
+				return fmt.Errorf("notification %s: %s", result.State, result.Detail)
 			}
 			return nil
 		}

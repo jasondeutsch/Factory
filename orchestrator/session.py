@@ -10,6 +10,7 @@ import os
 import shutil
 import string
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -151,6 +152,8 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
     child_env["FACTORY_PROJECT"] = str(project)
     child_env.pop("FACTORY_TASK_ID", None)
     child_env.pop("FACTORY_TASK_DIR", None)
+    child_env.pop("FACTORY_PARTICIPANT_ID", None)
+    child_env.pop("FACTORY_ROUTING_IDENTITY", None)
     if task is not None:
         child_env["FACTORY_TASK_ID"] = metadata["comms_id"]
         child_env["FACTORY_TASK_DIR"] = str(task)
@@ -243,11 +246,25 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
     }
 
 
+def wait_for_assignment(client: Client, task_id: str, participant_id: str, timeout: float) -> None:
+    """Do not start a Ralph iteration before the owner can assign this real instance."""
+    deadline = time.monotonic() + timeout
+    while True:
+        assignments = client.call("list_assignments", task_id=task_id, assignee_id=participant_id, limit=200)["assignments"]
+        if any(item["state"] in ("offered", "accepted", "working") for item in assignments):
+            return
+        if time.monotonic() >= deadline:
+            raise ValueError("no active assignment for the registered loop instance; ask the coordinator to assign it before retrying; do not implement unassigned work")
+        time.sleep(min(1, max(0, deadline - time.monotonic())))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("role")
     parser.add_argument("task", nargs="?", help="explicit local task artifact directory; omit to start an unassigned interactive role")
     parser.add_argument("--factory", help="explicit factory configuration for an unassigned session; must match a supplied task")
+    parser.add_argument("--routing-identity", help="explicit task inbox identity; defaults to role")
+    parser.add_argument("--replace-participant", help="explicit prior participant ID to retire; assignments are not transferred")
     parser.add_argument("--loop", type=int, metavar="ITERATIONS", help="start an approved Go coder assignment in a bounded native Ralph loop")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="print the launch plan without writes; --loop reads comms approvals")
@@ -264,6 +281,8 @@ def main() -> int:
             record = remote_task(metadata)
             for field in ("name", "brief", "owner"):
                 metadata[field] = record[field]
+        if task is None and (args.routing_identity or args.replace_participant):
+            raise ValueError("participant options require an explicit task")
         plan = prepare(args.role, task, metadata, runtime, args.loop, args.factory)
         if args.dry_run:
             print_json({key: value for key, value in plan.items() if key not in ("child_env", "pi_profile")})
@@ -300,7 +319,25 @@ def main() -> int:
         elif args.check:
             raise ValueError("--check is available for native Pi bundles; command adapters use their runner's checks")
         if task is not None:
-            event(task, "session_prepared", args.role, instructions_file=str(instructions), runner=plan["command"][0])
+            participant = Client().call(
+                "register_participant", task_id=metadata["comms_id"],
+                instance_id=instructions.parent.name, role=args.role,
+                routing_identity=actor(args.routing_identity or args.role),
+                replaces_participant_id=args.replace_participant or "",
+                request_key="launch-" + instructions.parent.name,
+            )
+            plan["child_env"]["FACTORY_PARTICIPANT_ID"] = participant["id"]
+            plan["child_env"]["FACTORY_ROUTING_IDENTITY"] = participant["routing_identity"]
+            with instructions.open("a", encoding="utf-8") as output:
+                output.write("\n## Registered session identity\n\n"
+                             f"Participant ID: {participant['id']}\n"
+                             f"Routing identity: {participant['routing_identity']}\n"
+                             "The launcher registered this instance. Reuse this participant; do not register a replacement.\n")
+            print(f"Factory: registered {participant['routing_identity']} ({participant['id']})", file=sys.stderr)
+            event(task, "session_prepared", args.role, instructions_file=str(instructions), runner=plan["command"][0], participant_id=participant["id"])
+            if args.loop is not None:
+                print("Factory: waiting for the coordinator to assign this registered loop instance...", file=sys.stderr)
+                wait_for_assignment(Client(), metadata["comms_id"], participant["id"], plan["check_timeout_seconds"])
         os.chdir(plan["cwd"])
         os.execvpe(plan["command"][0], plan["command"], plan["child_env"])
         return 0

@@ -27,6 +27,8 @@ func run() error {
 	task := flag.String("task", "", "Optional explicit task ID; otherwise watch all project tasks")
 	url := flag.String("url", os.Getenv("FACTORY_COMMS_URL"), "Comms MCP URL; defaults to http://127.0.0.1:8090/mcp")
 	bind := flag.String("bind", "", "Print session_ref JSON for an explicit live Herdr agent name, then exit")
+	notify := flag.String("notify", "", "Notify an active task routing identity once, using --agent and --task")
+	agent := flag.String("agent", "", "Actual live Herdr agent name for --notify")
 	once := flag.Bool("once", false, "Run one polling cycle and exit")
 	interval := flag.Duration("interval", 3*time.Second, "Polling interval (minimum one second)")
 	flag.Parse()
@@ -54,6 +56,22 @@ func run() error {
 	}
 	if *url == "" {
 		*url = "http://127.0.0.1:8090/mcp"
+	}
+	if *notify != "" || *agent != "" {
+		if *notify == "" || *agent == "" || *task == "" {
+			return errors.New("--notify requires --agent, --task and --project")
+		}
+		binding, err := host.Bind(ctx, *agent)
+		if err != nil {
+			return err
+		}
+		client, err := delivery.Connect(ctx, *url, os.Getenv("COMMS_AUTH_TOKEN"))
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		bridge := delivery.Bridge{Client: client, Host: host, Project: *project, TaskID: *task, Logger: slog.Default()}
+		return bridge.Notify(ctx, *notify, binding)
 	}
 	delay := *interval
 	for ctx.Err() == nil {

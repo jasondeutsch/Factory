@@ -1,6 +1,6 @@
 # Visible sessions with Herdr
 
-This reference is for the coordinating agent. The user asks for visible role sessions; handle the pane controls and helper calls on their behalf. The default is ordinary interactive sessions, each in a pane. No extension or MCP server is required. Only control Herdr from a Herdr-managed pane (`HERDR_ENV=1`). Outside Herdr, explain that the user must open their coordinating session there first; do not operate another focused session implicitly.
+This reference is for the coordinating agent. For coordinated factory work, open or reuse visible role sessions as needed; handle pane controls and helper calls on the user's behalf. The default is ordinary interactive sessions, each in a pane. No extension or MCP server is required. Only control Herdr from a Herdr-managed pane (`HERDR_ENV=1`). Outside Herdr, explain that the user must open their coordinating session there first; do not operate another focused session implicitly.
 
 ## Manual panes
 
@@ -14,11 +14,11 @@ For discoverable names, name the agents already running in your panes. The insta
 2. From the coordinator's Herdr pane, run `herdr agent list`. Read the actual pane IDs and identify the role sessions. Do not invent IDs from examples.
 3. Name a session with `herdr agent rename <actual-pane-id> account-architect`. A name must be unique among live agents.
 
-When the user requests new visible panes, use `herdr pane split --current --direction right --cwd "$PWD" --no-focus` from the project root. Use `down` when that gives more usable space and read `.result.pane.pane_id` from the response. Start the session with `herdr pane run <returned-id> <shell-quoted-launch-command>`, where the command runs `python3 .factory/orchestrator/session.py <role> <actual-task-path>` from that project root. Quote each launcher argument and then the command as required by your shell tool; do not splice arbitrary user text into it. Do not start a second instance in an occupied pane or run the interactive launcher in the coordinator's own blocking shell tool.
+When a required role needs a new visible pane, use `herdr pane split --current --direction right --cwd "$PWD" --no-focus` from the project root. Use `down` when that gives more usable space and read `.result.pane.pane_id` from the response. Start the session with `herdr pane run <returned-id> <shell-quoted-launch-command>`, where the command runs `python3 .factory/orchestrator/session.py <role> <actual-task-path>` from that project root. Quote each launcher argument and then the command as required by your shell tool; do not splice arbitrary user text into it. Do not start a second instance in an occupied pane or run the interactive launcher in the coordinator's own blocking shell tool.
 
 Inspect the pane to establish whether startup succeeded before assigning work. The launcher first prepares the native profile and checks credential readiness and enabled MCP connections. Required environment references must exist in that pane; do not assume it matches every coordinator subprocess. If startup fails, inspect the task event and private diagnostics, explain the actual error without credentials, and request only the needed correction. Never claim an agent is ready merely because its command was submitted or preflight passed.
 
-For a coder loop, first record the approved assignment durably, then add `--loop 5` to its pane launch; the initial native command starts the bounded assignment instead of waiting for another turn. Confirm startup and actual progress afterward. Keep this ordering distinct from an ordinary waiting worker, and follow the [Ralph reference](../../references/ralph.md). The loop remains in the same visible pane while Pi replaces its sessions.
+For a coder loop, add `--loop 5` to its pane launch. After checks, the launcher registers its real instance and waits up to `check_timeout_seconds` for an active assignment. Discover that participant and create the approved assignment during this wait; then the native command starts the loop. Do not pre-register a placeholder to assign work before launch. Confirm startup and actual progress afterward. Keep this ordering distinct from an ordinary waiting worker, and follow the [Ralph reference](../../references/ralph.md). The loop remains in the same visible pane while Pi replaces its sessions.
 
 Name live sessions distinctly, such as `account-architect` and `account-coordinator`. Record the mapping in the task with `task.py note`. Herdr names have their own syntax and length rules; they are not the task's display name.
 
@@ -43,3 +43,16 @@ The core toolbox neither installs this extension nor assumes all runners support
 ## Automatic inbox delivery
 
 Use the [delivery bridge setup](../../comms/delivery.md) to capture each live named session as structured `session_ref` before participant registration. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
+
+## One-shot inbox notification
+
+When no bound background bridge is running, notify after saving an assignment, peer message, or result. Run this from a Herdr-managed pane, using the actual service task ID, routing identity, and live agent name:
+
+```bash
+.factory/orchestrator/start-delivery.sh --project "$PWD" --task <comms-task-id> \
+  --notify <recipient-routing-identity> --agent <actual-live-agent-name>
+```
+
+The operation captures and verifies the live binding, resolves the active participant, and uses the same durable delivery claims as the polling bridge. It does not replace participants, paste stored message bodies, acknowledge messages, or submit results. Busy or blocked recipients cause a nonzero exit; uncertain input is recorded without blind retries. Inspect `list_deliveries` for the exact outcome. A repeated call does not resubmit already claimed/submitted notifications. No pending messages means no input is sent.
+
+Workers use this for results addressed to the coordinator too. The coordinator must supply its actual live name and peers' names in assignment context. For continuous delivery, use the bound background bridge instead; do not run competing manual prompts.

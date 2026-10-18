@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import concurrent.futures
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 from comms_fixture import CommsService
@@ -280,7 +283,24 @@ class ToolboxTest(unittest.TestCase):
         result = self.command("orchestrator/session.py", "coder_golang", self.task, "--loop", "3", "--check", env=env)
         self.assertIn("ralph-loop", json.loads(result.stdout)["commands"])
         self.assertFalse(capture.exists())
-        self.command("orchestrator/session.py", "coder_golang", self.task, "--loop", "3", env=env)
+        sys.path.insert(0, str(self.toolbox / "orchestrator/comms"))
+        from client import Client
+        client = Client(self.env)
+        task_id = json.loads((self.task / "task.json").read_text())["comms_id"]
+        owner = client.call("register_participant", task_id=task_id, instance_id="actual-owner", role="coordinator", routing_identity="coordinator", request_key="owner")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            launch = executor.submit(self.command, "orchestrator/session.py", "coder_golang", self.task, "--loop", "3", env=env)
+            deadline = time.monotonic() + 5
+            worker = None
+            while time.monotonic() < deadline:
+                workers = [p for p in client.call("list_participants", task_id=task_id)["participants"] if p["role"] == "coder_golang"]
+                if workers:
+                    worker = workers[0]
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(worker, "launcher must register before waiting for work")
+            client.call("create_assignment", task_id=task_id, assigning_participant_id=owner["id"], assignee_id=worker["id"], title="Fixture build", instructions="Fixture only", expected_output=["fixture result"], stage="build", attempt=1, request_key="build")
+            launch.result(timeout=10)
         record = json.loads(capture.read_text())
         self.assertEqual(record["cwd"], str(self.project))
         self.assertTrue(record["args"][-1].startswith("/ralph-loop --max-iterations=3 "))
@@ -621,6 +641,48 @@ class ToolboxTest(unittest.TestCase):
         selected = json.loads(self.command("orchestrator/session.py", "coordinator", "--factory", "golang", "--dry-run").stdout)
         self.assertIn(f"Source file: {root / 'factories/golang/README.md'}", selected["instructions"])
         self.assertIn(f"Source directory for relative references: {root / 'factories/golang'}", selected["instructions"])
+
+    def test_loop_waits_for_actual_participant_assignment(self):
+        sys.path.insert(0, str(SOURCE / "orchestrator"))
+        spec = importlib.util.spec_from_file_location("loop_launch_fixture", SOURCE / "orchestrator/session.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        client = Mock()
+        client.call.side_effect = [{"assignments": []}, {"assignments": [{"state": "offered"}]}]
+        with patch.object(module.time, "sleep"):
+            module.wait_for_assignment(client, "task-id", "actual-participant", 10)
+        self.assertEqual(client.call.call_count, 2)
+        client.call.assert_called_with("list_assignments", task_id="task-id", assignee_id="actual-participant", limit=200)
+        client.call.side_effect = None
+        client.call.return_value = {"assignments": [{"state": "submitted"}]}
+        with self.assertRaisesRegex(ValueError, "no active assignment"):
+            module.wait_for_assignment(client, "task-id", "actual-participant", 0)
+
+    def test_task_launch_registers_real_instance_and_refuses_silent_replacement(self):
+        capture, env = self.fake_pi()
+        self.command("orchestrator/session.py", "architect", self.task, "--check", env=env)
+        sys.path.insert(0, str(self.toolbox / "orchestrator/comms"))
+        from client import Client
+        client = Client(self.env)
+        task_id = json.loads((self.task / "task.json").read_text())["comms_id"]
+        self.assertEqual(client.call("list_participants", task_id=task_id)["participants"], [])
+        self.command("orchestrator/session.py", "architect", self.task, env=env)
+        record = json.loads(capture.read_text())
+        participants = client.call("list_participants", task_id=task_id)["participants"]
+        self.assertEqual(len(participants), 1)
+        first = participants[0]
+        self.assertEqual(first["instance_id"], Path(record["private_config"]).parent.name)
+        self.assertIn("Participant ID: " + first["id"], record["instructions"])
+        failed = self.command("orchestrator/session.py", "architect", self.task, expected=1, env=env)
+        self.assertIn("already registered", failed.stderr)
+        participants = client.call("list_participants", task_id=task_id)["participants"]
+        self.assertEqual(len(participants), 1)
+        self.assertNotIn("retired_at", participants[0])
+        self.command("orchestrator/session.py", "architect", self.task, "--replace-participant", first["id"], env=env)
+        participants = client.call("list_participants", task_id=task_id)["participants"]
+        self.assertEqual(len(participants), 2)
+        self.assertIsNotNone(participants[0]["retired_at"])
+        self.assertNotIn("retired_at", participants[1])
 
     def test_role_start_scripts_load_config_skills_and_unassigned_context(self):
         capture, env = self.fake_pi()

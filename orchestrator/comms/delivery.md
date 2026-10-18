@@ -71,3 +71,7 @@ For a live smoke test **inside Herdr**, use dedicated coordinator and worker ses
 3. Have the worker submit its result. Confirm a notification reaches the idle coordinator and it reads the canonical result. No human inbox prompt should be needed.
 4. Restart the bridge. Confirm no duplicate input or assignment appears. Confirm submitted/read/accepted/result are separate facts in the report.
 5. Make the worker busy or blocked: it must receive no input until ready. Close a dedicated recipient: confirm failure visibility and intact unread messages. Inspect before an explicit retry. Do not run destructive session tests against active work.
+
+## One-shot handoffs
+
+Task-bound launchers register their real instances automatically without a stored host binding. Use the [one-shot Herdr notification](../adapters/herdr/README.md#one-shot-inbox-notification) for these sessions when no bound background integration exists. It captures the current binding for that notification and records delivery without retiring or re-registering a participant. This avoids replacing an already assigned instance just to send a hint. It does not establish continuous polling; each sender must invoke it after saving a handoff.

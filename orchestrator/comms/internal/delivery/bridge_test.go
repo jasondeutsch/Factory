@@ -140,3 +140,47 @@ func TestBridgeUnavailableAndUncertainInput(t *testing.T) {
 	assert.Equal(t, msg.ID, inbox[0].ID)
 	assert.Len(t, inbox, 2, "no acknowledgement was synthesized")
 }
+
+func TestOneShotNotificationWithoutStoredBinding(t *testing.T) {
+	store, err := comms.Open(filepath.Join(t.TempDir(), "state.db"))
+	require.NoError(t, err)
+	defer store.Close()
+	server := httptest.NewServer(comms.HTTPHandler(store, "", slog.Default()))
+	defer server.Close()
+	client, err := Connect(t.Context(), server.URL+"/mcp", "")
+	require.NoError(t, err)
+	defer client.Close()
+	task, err := store.CreateTask(t.Context(), comms.CreateTaskInput{Project: "project", Name: "handoff", Brief: "fixture", Owner: "coordinator"})
+	require.NoError(t, err)
+	participant, err := store.RegisterParticipant(t.Context(), comms.RegisterParticipantInput{TaskID: task.ID, Role: "reviewer", InstanceID: "actual-instance", RoutingIdentity: "reviewer", RequestKey: "reviewer"})
+	require.NoError(t, err)
+	_, err = store.SendMessage(t.Context(), comms.SendMessageInput{TaskID: task.ID, Sender: "coordinator", Recipient: "reviewer", Kind: "question", Text: "Do not paste raw message /unsafe", RequestKey: "handoff"})
+	require.NoError(t, err)
+	host := &fakeHost{}
+	bridge := Bridge{Client: client, Host: host, TaskID: task.ID, Project: task.Project}
+	binding := Binding{Adapter: "herdr", WorkspaceID: "w1", PaneID: "w1:p1", TerminalID: "terminal", Name: "reviewer"}
+	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "not ready")
+	assert.Empty(t, host.prompts)
+	host.ready = true
+	require.NoError(t, bridge.Notify(t.Context(), "reviewer", binding))
+	require.Len(t, host.prompts, 1)
+	assert.Contains(t, host.prompts[0], `recipient="reviewer"`)
+	assert.NotContains(t, host.prompts[0], "/unsafe")
+	require.NoError(t, bridge.Notify(t.Context(), "reviewer", binding))
+	assert.Len(t, host.prompts, 1, "durable claim suppresses duplicate notification")
+	participants, err := store.Participants(t.Context(), comms.ListParticipantsInput{TaskID: task.ID})
+	require.NoError(t, err)
+	require.Len(t, participants, 1)
+	assert.Equal(t, participant.ID, participants[0].ID)
+	assert.Empty(t, participants[0].SessionRef, "one-shot notification does not replace identity")
+	_, err = store.SendMessage(t.Context(), comms.SendMessageInput{TaskID: task.ID, Sender: "coordinator", Recipient: "reviewer", Kind: "question", Text: "Second handoff", RequestKey: "second"})
+	require.NoError(t, err)
+	host.promptFailure = errors.New("input outcome unknown")
+	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "uncertain")
+	require.Len(t, host.prompts, 2)
+	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "remains uncertain")
+	assert.Len(t, host.prompts, 2, "uncertain input is not resent or reported successful")
+	require.ErrorContains(t, bridge.Notify(t.Context(), "unknown", binding), "no active participant")
+	bridge.Project = "other"
+	require.ErrorContains(t, bridge.Notify(t.Context(), "reviewer", binding), "another project")
+}
