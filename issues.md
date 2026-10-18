@@ -39,7 +39,9 @@ Comms stores tasks, messages, and events, but assignment identity, acceptance, o
 
 ## FACT-002 — External inbox delivery bridge with a Herdr adapter
 
-**Status:** Proposed · **Priority:** Second · **Depends on:** FACT-001
+**Status:** Implemented; live Herdr smoke test pending · **Priority:** Second · **Depends on:** FACT-001
+
+Implemented an external Go host bridge using the official MCP client, captured Herdr bindings, durable exclusive notification claims, bounded retries/reconnects, explicit uncertain-input recovery, owner failure findings, delivery MCP queries, and report visibility. Manual mode remains available. See [delivery setup and verification](comms/delivery.md). Automated HTTP/Herdr-fixture tests cover both directions; real idle-pane wake-up must still be verified inside Herdr. Process/contact identity beyond the captured binding remains FACT-003.
 
 ### Problem
 

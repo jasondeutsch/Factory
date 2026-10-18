@@ -27,7 +27,7 @@ func TestHTTPMCPRoundTripAndReport(t *testing.T) {
 	t.Cleanup(func() { session.Close() })
 	tools, err := session.ListTools(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, tools.Tools, 19)
+	require.Len(t, tools.Tools, 23)
 	call := func(name string, input, output any) {
 		t.Helper()
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: input})

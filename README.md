@@ -82,7 +82,7 @@ Your current agent can act as the pair writer, load its writing skills, and main
 
 The coordinator inspects the recorded state, handles messages, records your decisions, and explains the next action. It should not hand you helper commands for routine coordination. You can also enter a worker's pane and give feedback directly; that worker reports material changes back to the coordinator.
 
-Messages are saved in the comms task inbox. Agents check at turn boundaries and can notify peers through Herdr. Participant registration does not prove live availability. Assignment changes atomically save their inbox notifications and evidence; reading acknowledgement, acceptance, and result submission remain distinct. The mailbox alone does not wake idle sessions, and there is no background dispatcher. When notification is unavailable, the coordinator should explain the limitation and request the smallest necessary human action, such as asking a worker to check its inbox.
+Messages are saved in the comms task inbox. Agents check at turn boundaries and can notify peers through Herdr. Participant registration does not prove live availability. Assignment changes atomically save their inbox notifications and evidence; reading acknowledgement, acceptance, and result submission remain distinct. The mailbox alone does not wake idle sessions, and automatic delivery requires the optional [host bridge](comms/delivery.md) running inside Herdr. When notification is unavailable, the coordinator should explain the limitation and request the smallest necessary human action, such as asking a worker to check its inbox.
 
 ## What to customize
 

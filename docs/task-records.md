@@ -41,7 +41,7 @@ The owner creates assignments. Reading acknowledgement is separate from explicit
 
 ## Messages, decisions, and status
 
-Saving a message, notifying a live pane, acknowledging reading, and completing work are separate actions. Comms does not wake idle sessions; Herdr controls can notify them after a successful store. Preserve message IDs after notification failures and avoid duplicate assignments.
+Saving a message, notifying a live pane, acknowledging reading, and completing work are separate actions. Comms does not itself wake idle sessions; the optional [delivery bridge](../comms/delivery.md) or manual Herdr controls can notify them after a successful store. Delivery attempts appear separately in the task report and `list_deliveries`. Preserve message IDs after notification failures and avoid duplicate assignments.
 
 Owner status uses `pending`, `working`, `needs_input`, `blocked`, `complete`, or `cancelled`, with a version check against concurrent changes. These labels do not control processes. Cancellation requires the coordinator to stop active sessions through native controls as well.
 

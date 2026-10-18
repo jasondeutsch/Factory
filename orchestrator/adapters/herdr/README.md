@@ -4,7 +4,7 @@ This reference is for the coordinating agent. The user asks for visible role ses
 
 ## Manual panes
 
-The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in this mode.
+The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in manual mode. The optional [host delivery bridge](../../../comms/delivery.md) provides inbox notifications without a runner extension.
 
 ## Named sessions and notifications
 
@@ -39,3 +39,7 @@ Workers explicitly send results to the coordinator's mailbox. Humans can enter a
 [pi-herdr](https://github.com/AndrewJacop/pi-herdr) adds Pi-native spawning, peer messaging, result collection, and interactive session support. It is an optional alternative to these manual operations, not a bundled dependency. Check its current behavior and runner-specific limits before adopting it. Configure interactive sessions so panes remain available for feedback, and continue recording consequential handoffs in the task.
 
 The core toolbox neither installs this extension nor assumes all runners support the same callbacks. Comms MCP stores task messages and evidence. Herdr supplies live notification and terminal controls; the service itself does not wake sessions.
+
+## Automatic inbox delivery
+
+Use the [delivery bridge setup](../../../comms/delivery.md) to capture each live named session as structured `session_ref` before participant registration. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.

@@ -91,6 +91,18 @@ func MCPServer(store *Store) *mcp.Server {
 	registerTool(server, "update_assignment", "The declared assignee accepts/declines or reports working, blocked, or needs_input. The active task owner can cancel. Requires expected_version and request_key; atomically notifies the other participant and records an event. Reading acknowledgement is separate.", false, store.UpdateAssignment)
 	registerTool(server, "submit_result", "The declared assignee submits structured outcome, artifacts, checks, limitations and next action after accepting work. Requires expected_version and request_key. Atomically notifies the orchestrator and records an event. Submission is not approval or task completion.", false, store.SubmitResult)
 
+	registerTool(server, "claim_delivery", "Delivery bridge only: reserve one unread notification for 30 seconds. A null delivery means skip. Expired claims become uncertain, never blindly resent. Does not acknowledge or accept work.", false, store.ClaimDelivery)
+	registerTool(server, "finish_delivery", "Delivery bridge only: record host input submission, safe retry before input, failure, or uncertain terminal input. Requires the current lease_token. Does not change assignment state.", false, store.FinishDelivery)
+	registerTool(server, "list_deliveries", "Read the latest 200 host notification records. Submitted is not read, accepted, or completed. Failures also appear in events and the task report.", true, func(ctx context.Context, input TaskInput) (struct {
+		Deliveries []Delivery `json:"deliveries"`
+	}, error) {
+		items, err := store.Deliveries(ctx, input)
+		return struct {
+			Deliveries []Delivery `json:"deliveries"`
+		}{items}, err
+	})
+	registerTool(server, "retry_delivery", "Declared task owner explicitly retries a failed, uncertain, or submitted notification after inspecting the session. Reuse request_key. Does not recreate assignments or transfer ownership.", false, store.RetryDelivery)
+
 	return server
 }
 

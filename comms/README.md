@@ -138,7 +138,7 @@ For example, ask a connected coordinator:
 
 > Read `.factory/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep the spec, plan, and review artifacts in the repository. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
 
-The orchestrator creates and retains the task ID, registers itself and workers, creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents read their inbox at turn/iteration boundaries, acknowledge messages, and publish evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no automatic dispatcher or background agent scheduler.
+The orchestrator creates and retains the task ID, registers itself and workers, creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents read their inbox at turn/iteration boundaries, acknowledge messages, and publish evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no agent scheduler. The optional [host bridge](delivery.md) provides background inbox notification; it must actually be running.
 
 Artifacts remain client-managed files. A decision event can include `data.outcome`, `data.artifacts` with paths and hashes, and a rationale in `message`. Check evidence can include commands, exit status, output references, tool versions, and MCP names. These values are submitted claims; the server does not inspect host files, run checks, validate artifact hashes, or grant approval. Secrets should never be included in event/message bodies; no automatic redaction is performed.
 
@@ -186,3 +186,9 @@ go run ./cmd/comms -db ./local-state.db
 Tests use temporary databases and the real MCP Go client over localhost HTTP. They cover concurrent writes, retry keys, project/task boundaries, acknowledgement semantics, status-version conflicts, database reopening, usage coverage, escaped HTML, and optional bearer access. Container validation additionally checks non-root writes, health, and ephemeral versus explicitly mounted data. They do not test model behavior or automatically capture usage.
 
 For the surrounding agent setup, see the [Factory README](../README.md).
+
+## Optional host delivery
+
+The [delivery bridge](delivery.md) wakes eligible idle Herdr recipients through recorded session bindings. It uses the official Go MCP client, keeps notification attempts in this service's SQLite database, and leaves assignment decisions to agents. The report includes delivery state and failures. Manual delivery remains supported. Rebuild the comms image when updating to these tools/schema; source changes alone do not update an existing container.
+
+Bridge operations: `claim_delivery`, `finish_delivery`, `list_deliveries`, and task-owner `retry_delivery`. Notification submission is separate from reading, acceptance, and results. See the delivery reference for reservation, backoff, uncertain outcomes, restart recovery, and live validation.

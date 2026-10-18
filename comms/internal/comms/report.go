@@ -80,6 +80,8 @@ type StageSummary struct {
 }
 
 type TaskReport struct {
+	Deliveries             []Delivery      `json:"deliveries"`
+	DeliveryCounts         map[string]int  `json:"delivery_counts"`
 	FailedResults          int             `json:"failed_results"`
 	Participants           []Participant   `json:"participants"`
 	ParticipantCount       int             `json:"participant_count"`
@@ -131,6 +133,29 @@ func (s *Store) Report(ctx context.Context, id string) (TaskReport, error) {
 		return report, err
 	}
 	if err := tx.QueryRowContext(ctx, "SELECT count(*),coalesce(sum(acknowledged_at IS NULL),0) FROM messages WHERE task_id=?", id).Scan(&report.MessageCount, &report.UnacknowledgedMessages); err != nil {
+		return report, err
+	}
+	report.Deliveries, err = deliveries(ctx, tx, id)
+	if err != nil {
+		return report, err
+	}
+	report.DeliveryCounts = map[string]int{}
+	deliveryCounts, err := tx.QueryContext(ctx, "SELECT state,count(*) FROM deliveries WHERE task_id=? GROUP BY state", id)
+	if err != nil {
+		return report, err
+	}
+	for deliveryCounts.Next() {
+		var state string
+		var count int
+		if err := deliveryCounts.Scan(&state, &count); err != nil {
+			deliveryCounts.Close()
+			return report, err
+		}
+		report.DeliveryCounts[state] = count
+	}
+	err = deliveryCounts.Err()
+	deliveryCounts.Close()
+	if err != nil {
 		return report, err
 	}
 	report.Participants, err = participants(ctx, tx, ListParticipantsInput{TaskID: id, Limit: 200})

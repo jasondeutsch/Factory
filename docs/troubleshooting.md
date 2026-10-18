@@ -10,6 +10,7 @@ Users can ask their coordinator to configure or repair the setup. The diagnostic
 | Python 3.10+ | Task and session helpers. | No; the helpers use only its standard library. |
 | Pi with the native configuration, auth, MCP, and extension commands used here | New sessions using the provided Pi adapter. | No; an installed runner is required. Another CLI needs an explicit command adapter. |
 | Selected provider, actual model ID, and credentials | Each new configured model session. | No; there is deliberately no default provider or invented model ID. |
+| Go 1.26 | Build/run the optional host delivery bridge (a built binary avoids the runtime toolchain). | No, unless running the bridge from source. |
 | Herdr | Automated visible pane controls and notifications. | No; manual sessions remain possible. |
 | Go and project dependencies | Implementing and verifying Go code. | No. |
 | gopls with MCP support | Enabled coder/reviewer gopls connections. | No; disable explicitly if the task will proceed without it. |
@@ -73,3 +74,7 @@ python3 -B -m unittest discover -s factory/tests -v
 Inside an application project, use `.factory/tests` instead. Tests build the real comms server with Go (or use `FACTORY_TEST_COMMS` pointing to an existing binary), start isolated localhost servers with disposable databases, and exercise temporary projects and fake agent executables; optional native tests are skipped unless enabled. Set `FACTORY_TEST_PI` to an installed Pi executable for native auth and stdio MCP checks. Also set `FACTORY_TEST_RALPH_DIR` to a checkout of the pinned Ralph revision for its native transition test.
 
 The Ralph fixture starts a localhost-only HTTP server, supplies deterministic model responses, and calls both a fixture tool and the real comms MCP across fresh sessions. It needs permission to bind localhost but no paid provider or Linear credentials. These checks do not validate live Herdr controls, corporate-network behavior, model quality, or the application's product. Role skills and handoffs still need evaluation through real tasks.
+
+## Automatic notifications are not arriving
+
+First establish whether the [delivery bridge](../comms/delivery.md) is actually running inside Herdr against the expected project/task and updated comms service. An empty participant `session_ref` intentionally uses manual delivery; a bare name is not a captured binding. Inspect `list_deliveries`, task report, and bridge pane for specific failures. Working/blocked/unknown sessions wait without interruption. `submitted` confirms only host input. Inspect uncertain input before the owner explicitly retries; never recreate assignments to retry a notification. A source update does not rebuild a running comms image or replace existing participant registrations.

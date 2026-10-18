@@ -89,3 +89,7 @@ The cost is that coordination is active agent work. Mailboxes do not wake idle a
 Native profiles separate runner configuration and transcripts, but all sessions inherit the launcher's environment and retain host permissions. The setup supplies no agent container sandbox, credential filtering, automatic redaction, or authenticated approval service. Comms renders reports from records submitted to its database. It does not automatically collect agent usage; missing measurements remain unknown.
 
 Those limits are relevant when deciding whether this portable setup fits a particular assignment. Use [task records and recovery](task-records.md) to understand the durable evidence and [troubleshooting](troubleshooting.md) when a dependency or handoff fails.
+
+## Optional delivery bridge
+
+[Inbox delivery](../comms/delivery.md) is a small Go host process using the official MCP client and a Herdr CLI adapter. It removes model-based polling and manual idle-agent prompts. Its tradeoffs are an installed Go toolchain (or built binary), execution inside Herdr, explicit captured session bindings, and conservative manual recovery for uncertain terminal input. Notification attempts share comms storage; the bridge has no workflow scheduler or private task database. Live session identity/contact monitoring remains separate work.

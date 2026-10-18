@@ -85,3 +85,18 @@ CREATE TABLE IF NOT EXISTS coordination_requests (
  output TEXT NOT NULL,
  PRIMARY KEY(task_id, actor_key, request_key)
 );
+
+-- Host notification state is separate from reading and assignment ownership.
+CREATE TABLE IF NOT EXISTS deliveries (
+ task_id TEXT NOT NULL REFERENCES tasks(id),
+ message_id TEXT NOT NULL REFERENCES messages(id),
+ participant_id TEXT NOT NULL REFERENCES participants(id),
+ state TEXT NOT NULL CHECK(state IN ('claimed','submitted','retry','failed','uncertain')),
+ attempts INTEGER NOT NULL,
+ detail TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ retry_at INTEGER NOT NULL,
+ lease_token TEXT NOT NULL,
+ PRIMARY KEY(message_id,participant_id)
+);
+CREATE INDEX IF NOT EXISTS delivery_participant ON deliveries(task_id,participant_id,state);
