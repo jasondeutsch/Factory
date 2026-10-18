@@ -108,3 +108,7 @@ CREATE TABLE IF NOT EXISTS sessions (
  observed_at TEXT NOT NULL DEFAULT '',
  expires_at TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS task_factories (
+ task_id TEXT PRIMARY KEY REFERENCES tasks(id),
+ snapshot TEXT NOT NULL
+);

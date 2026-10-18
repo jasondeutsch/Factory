@@ -55,9 +55,12 @@ def attach_record(record: dict, recipe: str) -> None:
     project = installed_project()
     if record["project"] != str(project):
         raise ValueError("task project must match the selected application root")
-    expected_owner = factory_definition(recipe)["owner"]
+    definition = factory_definition(recipe)
+    expected_owner = definition["owner"]
     if record["owner"] != expected_owner:
         raise ValueError("task owner does not match the selected factory")
+    Client().call("set_task_factory", task_id=record["id"], factory={"name": definition["name"], "owner": definition["owner"],
+                  "agents": [{"name": member["name"], "path": member["path"]} for member in definition["agents"]]})
     directory = ROOT / "tasks"
     directory.mkdir(parents=True, exist_ok=True)
     # flock is released on process exit, including interruption. Keep its inode

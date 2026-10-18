@@ -149,3 +149,9 @@ Prepare the complete scaffold before publishing the task pointer and serialize a
 A successful coordinator check does not establish that the architect, coder, or reviewer has usable credentials, required tools, or MCP connections. Discovering those failures during a handoff interrupts the task unnecessarily.
 
 Offer a factory-wide check using the existing member startup checks. Report readiness separately for each member, with actionable failures and private diagnostic paths. Do not start model work, register participants, create tasks, print credentials, or claim that resolving credentials proves remote model access. Keep this a small extension of existing checks, not a new configuration layer.
+
+## FACT-008 — Dynamic task status view
+
+**Status:** Implemented
+
+A read-only auto-refreshing task page and `get_task_status` share the same records. Immutable public factory membership distinguishes configured members from actual instances. Assignment edges show recorded dispatches; contact, work state, messages and results remain distinct. No Go-specific members or planned graph are hardcoded.

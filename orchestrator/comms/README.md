@@ -181,3 +181,9 @@ Bridge operations: `claim_delivery`, `finish_delivery`, `list_deliveries`, and t
 The launcher records instruction/skill paths and hashes, model/provider/thinking, runner, MCP names, preparation time, and native-check status. It excludes credential values and raw profiles. The configuration fingerprint represents public instruction/model/tool selections, not every native option. A retired participant or expired observation reads as `unknown`; keep assignment progress and results separate. These are declared observations, not per-agent authentication or proof of useful work.
 
 Rebuild/restart comms to expose the new tools; schema 4 adds session snapshots while preserving existing records. Restart the host bridge to enable contact sampling. Existing sessions without a recorded manifest remain unobserved until explicitly relaunched; do not invent a historical snapshot from current source files.
+
+## Live task status
+
+Open `/tasks/<task-id>/status` for a read-only page refreshed every ten seconds. `get_task_status` and `/tasks/<task-id>/status.json` expose the same summary. Existing bearer-token protection applies to all three; use a client/proxy that supplies the authorization header when enabled. The page contains no mutation controls.
+
+Local task attachment publishes only the selected factory's name, owner, and member names/paths through `set_task_factory`. That task snapshot is immutable and contains no native provider configuration. Configured members without instances appear as not started; actual registrations, assignments, handoffs, messages and contact come from comms. The diagram shows actual assignment edges, not an inferred recipe sequence. Older tasks without a snapshot explicitly show membership as unknown. Large views flag bounded assignment/participant data; use MCP pagination for the rest.

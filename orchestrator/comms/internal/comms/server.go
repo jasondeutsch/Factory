@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -46,6 +47,8 @@ func registerTool[Input, Output any](server *mcp.Server, name, description strin
 
 func MCPServer(store *Store) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory-comms", Version: "0.1.0"}, &mcp.ServerOptions{Instructions: "Shared Factory task records. Always use an explicit project and task. Role names and evidence are declared by clients, not authenticated. Stored messages do not wake idle agents. Do not put credentials in records. Missing usage is unknown. Use structured assignments and participants for ownership and results; ordinary messages are conversation, not assignment state. This server does not execute workflows or read host artifacts."})
+	registerTool(server, "set_task_factory", "Record immutable public factory membership; never include native settings or credentials. Safe to repeat unchanged.", false, store.SetTaskFactory)
+	registerTool(server, "get_task_status", "Read the same dynamic task summary used by the status page, with configured members, actual instances, work and contact state. Bounded records are marked partial.", true, store.Status)
 	registerTool(server, "record_session", "Record an immutable prepared session manifest. Exclude credentials and raw native configuration. Declared snapshot, not proof of model activity.", false, store.RecordSession)
 	registerTool(server, "get_session", "Read a participant snapshot and expiring host contact. Expired contact is unknown, not failed work.", true, store.Session)
 	registerTool(server, "record_contact", "Host adapter observation against the current binding, expires after 30 seconds. Not progress evidence or authentication.", false, store.RecordContact)
@@ -115,6 +118,34 @@ func HTTPHandler(store *Store, token string, logger *slog.Logger) http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: logger})
 	private := http.NewServeMux()
 	private.Handle("/mcp", mcpHandler)
+	private.HandleFunc("GET /tasks/{id}/status.json", func(w http.ResponseWriter, r *http.Request) {
+		status, err := store.Status(r.Context(), TaskInput{TaskID: r.PathValue("id")})
+		if err != nil {
+			http.Error(w, "Task status unavailable", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		json.NewEncoder(w).Encode(status)
+	})
+	private.HandleFunc("GET /tasks/{id}/status", func(w http.ResponseWriter, r *http.Request) {
+		status, err := store.Status(r.Context(), TaskInput{TaskID: r.PathValue("id")})
+		if err != nil {
+			http.Error(w, "Task status unavailable", http.StatusNotFound)
+			return
+		}
+		var output bytes.Buffer
+		if err := RenderStatus(&output, status); err != nil {
+			http.Error(w, "Could not render status", 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Write(output.Bytes())
+	})
+
 	private.HandleFunc("GET /tasks/{id}/report.html", func(writer http.ResponseWriter, request *http.Request) {
 		report, err := store.Report(request.Context(), request.PathValue("id"))
 		if errors.Is(err, errTaskNotFound) {
