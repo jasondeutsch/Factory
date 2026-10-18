@@ -4,7 +4,7 @@ This reference is for the coordinating agent. The user asks for visible role ses
 
 ## Manual panes
 
-The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in manual mode. The optional [host delivery bridge](../../../comms/delivery.md) provides inbox notifications without a runner extension.
+The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in manual mode. The optional [host delivery bridge](../../comms/delivery.md) provides inbox notifications without a runner extension.
 
 ## Named sessions and notifications
 
@@ -28,7 +28,7 @@ Create canonical work with comms `create_assignment` using the registered partic
 herdr agent prompt account-architect "Check your comms inbox for the assigned task."
 ```
 
-Use only a known live name and safe argument quoting. Terminal input submission is not acknowledgement, acceptance, or completion. A notification failure leaves the assignment and message pending; inspect the agent and re-notify without duplicating work. Workers explicitly accept/decline and submit results through the [assignment tools](../../../comms/coordination.md).
+Use only a known live name and safe argument quoting. Terminal input submission is not acknowledgement, acceptance, or completion. A notification failure leaves the assignment and message pending; inspect the agent and re-notify without duplicating work. Workers explicitly accept/decline and submit results through the [assignment tools](../../comms/coordination.md).
 
 Use `herdr agent get <name>` and `herdr agent read <name> --source recent-unwrapped --lines 120` to inspect sessions. For explicit notification without creating another message, use `herdr agent prompt <name> "Check your task inbox."`. Herdr may reject blocked dialogs; do not answer an approval prompt on the user's behalf without authority. Terminal output is a view, not a durable task result.
 
@@ -42,4 +42,4 @@ The core toolbox neither installs this extension nor assumes all runners support
 
 ## Automatic inbox delivery
 
-Use the [delivery bridge setup](../../../comms/delivery.md) to capture each live named session as structured `session_ref` before participant registration. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
+Use the [delivery bridge setup](../../comms/delivery.md) to capture each live named session as structured `session_ref` before participant registration. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.

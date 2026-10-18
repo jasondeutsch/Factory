@@ -71,6 +71,14 @@ def load(directory: Path, config: dict, project: Path, session: Path, environmen
         base = object_file(source / f"{name}.json")
         local = source / f"{name}.local.json"
         files[name] = merge(base, object_file(local)) if local.exists() else base
+    # Factory member overrides are applied to private native files, never to the
+    # reusable authored profile. Lists replace; objects merge recursively.
+    for name, overlay in config.get("pi", {}).items():
+        files[name] = merge(files[name], overlay)
+    settings = files["settings"]
+    for field, native in {"provider": "defaultProvider", "model": "defaultModel", "thinking": "defaultThinkingLevel", "tools": "defaultTools"}.items():
+        if field in config:
+            settings[native] = copy.deepcopy(config[field])
     settings, models, mcp = (files[name] for name in FILES)
     provider, model = settings.get("defaultProvider"), settings.get("defaultModel")
     for name, value in (("defaultProvider", provider), ("defaultModel", model)):
@@ -168,7 +176,7 @@ def check(profile: dict, executable: str, environment: dict, cwd: Path, timeout:
     settings = profile["files"]["settings"]
     provider, model = settings.get("defaultProvider"), settings.get("defaultModel")
     if not provider or not model:
-        raise ValueError(f"set defaultProvider and defaultModel in {profile['source']}/settings.json (or settings.local.json)")
+        raise ValueError("set this member's config.provider and config.model in factory.json, and select it with --factory or a task; native bundle defaults are also supported")
     missing = [name for name in profile["required_env"] if not environment.get(name)]
     if missing:
         raise ValueError("missing configuration environment variable(s): " + ", ".join(missing))

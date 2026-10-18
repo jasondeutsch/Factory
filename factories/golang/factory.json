@@ -1,0 +1,31 @@
+{
+  "name": "golang",
+  "owner": "coordinator",
+  "agents": [
+    {
+      "name": "coordinator",
+      "path": "../../orchestrator",
+      "config": {}
+    },
+    {
+      "name": "architect",
+      "path": "../../resources/agents/architect",
+      "config": {}
+    },
+    {
+      "name": "architecture_reviewer",
+      "path": "../../resources/agents/architecture_reviewer",
+      "config": {}
+    },
+    {
+      "name": "coder_golang",
+      "path": "agents/coder_golang",
+      "config": {}
+    },
+    {
+      "name": "code_reviewer_golang",
+      "path": "agents/code_reviewer_golang",
+      "config": {}
+    }
+  ]
+}

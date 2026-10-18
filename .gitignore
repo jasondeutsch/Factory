@@ -1,5 +1,4 @@
-tasks/*
-!tasks/.gitkeep
+tasks/
 **/config.local.json
 **/pi/*.local.json
 **/auth.json
@@ -7,3 +6,7 @@ tasks/*
 __pycache__/
 *.pyc
 .DS_Store
+# Pi-managed extension caches populated by make install/update.
+**/pi/git/
+**/pi/npm/
+**/pi/node_modules/

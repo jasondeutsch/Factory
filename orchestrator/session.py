@@ -14,14 +14,14 @@ import uuid
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from factorylib import ROOT, actor, event, installed_project, print_json, read_task, Client, remote_task
+sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
+from factorylib import factory_definition, agent_directory, factory_recipe, ROOT, actor, event, installed_project, print_json, read_task, Client, remote_task
 from adapters.pi import profile as pi_profile
 
 
-def configuration(role: str) -> tuple[Path, dict]:
+def configuration(role: str, factory: str | None = None) -> tuple[Path, dict]:
     actor(role)
-    directory = ROOT / "orchestrator" if role == "coordinator" else ROOT / "agents" / role
+    directory = agent_directory(role, factory)
     config = json.loads((directory / "config.json").read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("agent config.json must be an object")
@@ -31,6 +31,13 @@ def configuration(role: str) -> tuple[Path, dict]:
     misplaced = [name for name in ("provider", "model", "thinking", "tools") if name in config]
     if misplaced:
         raise ValueError("configure " + ", ".join(misplaced) + " in native Pi settings.json/models.json, not config.json")
+    if factory is not None:
+        member = next(item for item in factory_definition(factory)["agents"] if item["name"] == role)
+        overrides = dict(member.get("config", {}))
+        if "skills" in overrides:
+            base = ROOT / "factories" / factory
+            overrides["skills"] = [str((base / value).resolve()) for value in overrides["skills"]]
+        config = pi_profile.merge(config, overrides)
     return directory, config
 
 
@@ -74,9 +81,12 @@ def approved_documents(task: Path) -> None:
             raise ValueError(f"Ralph requires approval of the current {name}; ask the coordinator to record the actual decision")
 
 
-def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, loop_iterations: int | None = None) -> dict:
+def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, loop_iterations: int | None = None, factory: str | None = None) -> dict:
     project = installed_project()
-    directory, config = configuration(role)
+    if metadata and factory and metadata["factory"] != factory:
+        raise ValueError("--factory conflicts with the task's recorded factory")
+    selected_factory = metadata["factory"] if metadata else factory
+    directory, config = configuration(role, selected_factory)
     instruction = directory / ("SKILL.md" if role == "coordinator" else "agent.md")
     skill_files = []
     for value in text_list(config, "skills"):
@@ -86,18 +96,15 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         skill_files.append(path / "SKILL.md" if path.is_dir() else path)
     project_key = hashlib.sha256(str(project).encode()).hexdigest()[:16]
     session = runtime / project_key / (task.name if task else "unassigned") / role / uuid.uuid4().hex
-    context = f"Role: {role}\nProject root: {project}\nInstance ID: {session.name}\n"
+    context = (f"Role: {role}\nProject root: {project}\nToolkit root: {ROOT}\nInstance ID: {session.name}\n"
+               f"Role instruction source: {instruction}\n")
     recipe_text = ""
     if task is not None:
-        recipe = ROOT / "factories" / (metadata["factory"] + ".md")
-        if recipe.parent != ROOT / "factories":
-            raise ValueError("invalid factory recipe in task.json")
         context += (
             f"Task directory: {task}\nTask owner: {metadata['owner']}\nTask name: {metadata['name']}\n"
             f"Comms project: {metadata['project']}\nComms task ID: {metadata['comms_id']}\n"
             f"Task brief (JSON string):\n{json.dumps(metadata['brief'], ensure_ascii=False)}\n"
         )
-        recipe_text = f"\n## Factory recipe\n\n{recipe.read_text(encoding='utf-8')}\n"
     else:
         context += (
             f"Comms project: {project}\nNo task is selected. Do not assume a previous task or choose the newest.\n"
@@ -105,6 +112,17 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
             "and attach its local artifacts. Other workers wait for an explicit assignment containing "
             "the task ID, artifact directory, and recipe before beginning work.\n"
         )
+    if selected_factory is not None:
+        recipe = factory_recipe(selected_factory)
+        context += f"Selected factory configuration: {recipe.parent / 'factory.json'}\n"
+        recipe_text = (f"\n## Factory configuration\n\nSource: {recipe.parent / 'factory.json'}\n"
+                       f"{json.dumps(factory_definition(selected_factory), indent=2)}\n"
+                       f"\n## Factory recipe\n\nSource file: {recipe}\n"
+                       f"Source directory for relative references: {recipe.parent}\n\n"
+                       f"{recipe.read_text(encoding='utf-8')}\n")
+    else:
+        available = sorted((ROOT / "factories").glob("*/factory.json"))
+        context += "Available factory configuration files:\n" + "".join(f"- {path}\n" for path in available)
     instructions = (
         f"# Factory session\n\n{context}\n"
         "Status, messages, decisions, and events are authoritative in comms, not local files.\n\n"
@@ -112,7 +130,11 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
         "Starting this session does not authorize implementation or approval. "
         "Workers wait for an assignment; the pair writer can collaborate directly with the user. "
         "The coordinator can begin by clarifying scope and authority. Stay available for follow-up.\n\n"
-        f"## Role instructions\n\n{instruction.read_text(encoding='utf-8')}\n"
+        f"## Role instructions\n\nSource file: {instruction}\n"
+        f"Source directory for relative references: {instruction.parent}\n\n"
+        "Resolve relative document links from each section's stated source directory. "
+        "Resolve factory member paths from their factory.json directory.\n\n"
+        f"{instruction.read_text(encoding='utf-8')}\n"
         f"{recipe_text}"
     )
     for path in skill_files:
@@ -190,6 +212,8 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
             initial_prompt,
         ])
     elif runner == "command":
+        if any(key in config for key in ("provider", "model", "thinking", "tools")) or config.get("pi"):
+            raise ValueError("Pi provider/model/thinking/tools and pi overrides require runner=pi; configure command runners through command argv and env")
         if any(config.get(key) for key in ("config_dir", "auth_file_env", "mcp_auth_file_env")):
             raise ValueError("config_dir/auth_file_env/mcp_auth_file_env are Pi adapter options; remove them for runner=command")
         if config.get("args"):
@@ -223,6 +247,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("role")
     parser.add_argument("task", nargs="?", help="explicit local task artifact directory; omit to start an unassigned interactive role")
+    parser.add_argument("--factory", help="explicit factory configuration for an unassigned session; must match a supplied task")
     parser.add_argument("--loop", type=int, metavar="ITERATIONS", help="start an approved Go coder assignment in a bounded native Ralph loop")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="print the launch plan without writes; --loop reads comms approvals")
@@ -239,7 +264,7 @@ def main() -> int:
             record = remote_task(metadata)
             for field in ("name", "brief", "owner"):
                 metadata[field] = record[field]
-        plan = prepare(args.role, task, metadata, runtime, args.loop)
+        plan = prepare(args.role, task, metadata, runtime, args.loop, args.factory)
         if args.dry_run:
             print_json({key: value for key, value in plan.items() if key not in ("child_env", "pi_profile")})
             return 0

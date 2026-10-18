@@ -1,0 +1,13 @@
+{
+  "runner": "pi",
+  "config_dir": "pi",
+  "skills": [
+    "../../../orchestrator/comms/skills/task-comms",
+    "skills/architecture-challenge",
+    "../../skills/conventional-commits",
+    "../../skills/evidence-based-debugging",
+    "../../skills/linear-context"
+  ],
+  "args": [],
+  "env": {}
+}

@@ -1,134 +1,81 @@
 # Factory
 
-A portable toolbox for working with a small team of interactive agents. Tell your agent what you want to accomplish; the coordinator uses the factory recipes, delegates work to visible sessions, and keeps the task record up to date. Small Python helpers support that work behind the scenes. Agents coordinate through a small MCP service; there is no workflow execution engine.
+A portable toolkit for coordinating interactive agents. An agent follows your team's factory recipe, delegates work to visible sessions, and records assignments, decisions, and evidence through an MCP service. You drive the task through conversation.
 
-Start here for normal use. [Tools and tradeoffs](docs/tools.md) explains the components and why they are used. [Setup and troubleshooting](docs/troubleshooting.md) covers dependencies, configuration problems, and recovery.
+## Layout and configuration
 
-The [comms service](comms/README.md) provides SQLite-backed tasks, inboxes, decisions, evidence, and HTML reports through MCP. Every role references its shared [communication skill](comms/skills/task-comms/SKILL.md) directly. Docker Compose keeps data inside the container by default; persistence is an explicit volume choice.
+```text
+orchestrator/       # Coordinator, MCP server, launchers, delivery, and infrastructure tests
+resources/          # Reusable architect/reviewer agents and shared skills
+factories/
+  golang/           # Go factory definition, recipe, agents, skills, templates, and tests
+  writing/          # Writing factory definition, recipe, and pair-writer agent
+docs/               # Setup, tools, and task records
+```
 
-## Included roles
+**Each factory's `factory.json` declares its member names, bundle paths, and task owner.** Its `README.md` describes how those members work together. Directory placement does not define membership. See the [configuration reference](factories/README.md), [Go configuration](factories/golang/factory.json), and [writing configuration](factories/writing/factory.json).
 
-| Role | Responsibility |
-| --- | --- |
-| Coordinator | Your main conversation: assigns work, records decisions, tracks status, and reports evidence. Your existing agent can take this role. |
-| Architect | Investigates the actual project and drafts `spec.html` and `plan.html`. |
-| Architecture reviewer | Challenges assumptions, behavior, feasibility, and complexity before implementation. |
-| Go coder | Implements approved work, uses tests and lint during coding, and records progress and handoffs. |
-| Go code reviewer | Independently examines source and verifies the result; sends repairs back to the coder. |
-| Pair writer | Collaborates interactively on technical and business writing without requiring spec/plan artifacts. |
+Each member's factory.json `config` sets factory-specific execution choices. Its referenced bundle supplies reusable instructions, skill/runner defaults, and native profile defaults. Reusable bundles live in `resources/agents/`; factory-specific bundles live with their factory. Paths in `factory.json` are relative to that file. [Session configuration](orchestrator/README.md) explains overrides and startup behavior.
 
 ## Install in a project
 
-Copy this directory's **contents** into `.factory/` at your application project's root. You can ask an agent to do that:
+Copy this directory's contents into `.factory/` at the application root, preserving existing customizations. You can ask your agent:
 
-> Copy the contents of `/path/to/factory` into this project's `.factory/` directory. Preserve any existing local customization. Then read `.factory/README.md`.
+> Install `/path/to/factory` into this project's `.factory/` directory. Read its README and coordinator skill. Configure the Go factory for our provider and model; keep credentials in environment variables.
 
-The helpers require Python 3.10 or newer. Use your existing agent as coordinator. The launcher supports native Pi bundles and explicitly configured commands for other runners. Herdr provides visible panes and notifications; start your coordinating agent inside Herdr when you want it to manage those panes. The [dependency overview](docs/troubleshooting.md#what-must-be-available) distinguishes installed requirements from optional integrations. Agents run on the host. Only the comms service runs in its supplied container.
+With Homebrew already available, `make install` installs Herdr, Git, Go, Python, golangci-lint, gopls, Pi, and the Go coder's declared extensions. Install Docker with Compose separately. `make update` updates those tools and reconciles dependencies; Ralph remains at its declared Git revision. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites, corporate-network configuration, and updates.
 
-Ask the coordinator to start `.factory/comms` with Docker Compose and configure its own native MCP connection to `http://127.0.0.1:8090/mcp` (or your selected endpoint). Prepared worker profiles include that connection. Existing sessions need an explicit reload or reconnect; reading a skill does not register tools. Use an explicit volume if task history must survive container replacement.
+Set each needed member's `config.provider` and `config.model` in factory.json and provide credentials before launch. Starter profiles have no selected provider or model. The Go coder and reviewer also require gopls with MCP support, or an explicit decision to disable it.
 
-Before launching workers, ask the coordinator to configure each role's provider and model. For example: “Configure the architect and Go agents to use our gateway at `<base URL>` with model `<model ID>` and the API key from `TEAM_MODEL_API_KEY`. Use the appropriate API protocol for that endpoint.” Each role can use different settings. Starter bundles do not invent model IDs or silently inherit unrelated personal defaults. The Go coder and reviewer also require gopls with MCP support, or an explicit decision to disable that connection.
+## Start the coordinator
 
-## Start a configured agent
-
-Every role has an executable `start.sh`. Run it in the terminal or visible Herdr pane where you want that agent to remain interactive:
+From the application root, select the factory whose coordinator settings should apply:
 
 ```bash
-.factory/orchestrator/start.sh
-.factory/agents/architect/start.sh
-.factory/agents/pair_writer/start.sh
+docker-compose -f .factory/orchestrator/comms/compose.yaml up --build -d
+.factory/orchestrator/start.sh --factory golang
 ```
 
-Without a task argument, the coordinator or writer can establish a task from your conversation; workers wait for an explicit assignment. No newest-task inference occurs. To bind a session at startup, pass its local artifact directory:
+Run inside Herdr for visible pane management. The services remain running after the coordinator exits. No task or worker starts automatically. `make -C .factory start` is the shortcut for an unselected coordinator using its bootstrap bundle settings; it does not select a factory or apply member overrides.
 
-```bash
-.factory/agents/coder_golang/start.sh .factory/tasks/<task-directory>
-.factory/agents/coder_golang/start.sh .factory/tasks/<task-directory> --loop 5
-```
+You can also use an existing agent as coordinator: read `.factory/orchestrator/SKILL.md`, connect its native MCP client to `http://127.0.0.1:8090/mcp`, and reload it. Reading a skill alone does not register tools. The supplied worker profiles already declare this connection.
 
-The same entrypoints accept `--dry-run` to inspect the resolved launch and `--check` to check native readiness without chat. Start comms first and configure each role's actual provider/model. These scripts resolve their own location, load the role's configuration and local overlays, include every listed skill with its source directory, prepare its native MCP profile, and start in the application root. They do not rely on whichever personal Pi profile happens to be active. They work from another current directory when invoked by absolute path; relative task arguments are relative to your current directory.
+Use `.factory/orchestrator/start.sh --factory golang --check` to check the selected member's readiness without model inference.
 
-All scripts delegate to one [launcher](orchestrator/session.py); they contain no separate model settings, skill lists, or lifecycle logic. Existing sessions still need an explicit reload/reconnect when settings change. See [reliable startup](orchestrator/README.md#start-a-role) for configuration precedence and checks.
+## Request work
 
-## Start a Go task
+> Use the Go factory to reduce repeated account database reads without changing API behavior. Coordinate visible agents and bring the spec and plan back to me for approval.
 
-In your existing agent session:
+The [Go factory](factories/golang/README.md) uses architecture drafting/review, human spec/plan approval, bounded implementation, and independent code review. Lint and tests are tools used during coding. The coordinator selects declared members as needed, creates assignments, and reports blockers and results. Decisions remain with you unless explicitly delegated.
 
-> Read `.factory/orchestrator/SKILL.md`. Use the Go development factory to start a task: reduce repeated account database reads without changing API behavior. Coordinate the agents in visible Herdr panes. Bring the spec and plan back to me for approval before implementation.
+For writing:
 
-The coordinator creates the task, loads the recipe, registers the participating instances, and creates explicit assignments for the appropriate role sessions. Workers accept or decline, report progress/blockers, and submit results through comms; the coordinator decides the next action. It can use existing sessions or open new visible panes as requested. You do not need to start another coordinator or run task lifecycle commands yourself.
+> Use the writing factory to explain our proposed platform to engineering and finance. Discuss the argument with me before drafting.
 
-Names can contain uppercase letters and spaces. The agent can take a long brief directly from your conversation or read a file you provide. It should present questions and approval requests in your conversation, linking the relevant documents.
+The [writing factory](factories/writing/README.md) uses the interactive pair writer without mandatory spec/plan documents. Both factories can start from conversation; you do not need to prepare a request file or operate task lifecycle scripts. [Linear context](orchestrator/README.md#linear-ticket-context) is optional when requested and configured.
 
-Read [the Go factory](factories/golang.md) for its working sequence. [The Herdr adapter](orchestrator/adapters/herdr/README.md) documents the mechanics for the coordinating agent.
+## Observe and give feedback
 
-After approval, the coder normally uses a bounded `edxeth/pi-ralph-loop` assignment: one verified plan item per fresh session, durable progress, then an independent code review. You can give feedback in its pane. Decisions and blockers stop the loop. The [Ralph reference](orchestrator/references/ralph.md) explains the integration and its one-active-loop-per-project limit.
+Ask the coordinator for progress, unresolved questions, evidence, or the task report. Enter a worker's pane to give feedback directly; consequential changes should be reported back to the coordinator.
 
-To start from Linear, ask: “Use Linear issue TEAM-123 as the source for this task.” The coordinator configures the planner or reviewer's optional official read-only MCP connection using `LINEAR_API_KEY`, then records the relevant ticket context. See [Linear configuration](orchestrator/README.md#linear-ticket-context).
+Each bundle has a thin `start.sh` for manual startup. An explicit task-directory argument binds the session to that task's factory. `--dry-run` previews configuration; `--check` checks native readiness without model inference. See [agent startup](orchestrator/README.md#start-a-role).
 
-## Write interactively
+Stored messages do not wake idle agents by themselves. The optional [Herdr delivery bridge](orchestrator/comms/delivery.md) supplies background inbox hints. Manual inbox checks remain available. Notification, reading, assignment acceptance, and submitted results are separate records.
 
-> Read `.factory/agents/pair_writer/agent.md` and use the writing factory. Help me explain our proposed platform to engineering and finance. Discuss the argument with me before drafting.
+## Records and limits
 
-Your current agent can act as the pair writer, load its writing skills, and maintain the writing task. Alternatively, ask the coordinator to open a dedicated writer pane. [The writing factory](factories/writing.md) does not require a spec or plan.
+The [orchestrator MCP server](orchestrator/comms/README.md), called `comms` in agent connections, stores task status, assignments, messages, decisions, events, and measured usage. The same Compose file starts its read-only SQLite admin panel at `http://127.0.0.1:8091/`. Both share a named volume that retains task history across container replacement; `docker-compose down -v` explicitly deletes it.
 
-## Drive the task through conversation
+Local documents live in `.factory/tasks/`, created when needed. Private profiles and transcripts live under `$HOME/.factory/runtime/`. Application changes belong in the application workspace. See [task artifacts and recovery](orchestrator/README.md#task-artifacts-and-recovery) for identities, storage, resume, and retention.
 
-- “What's happening, and what's blocked?”
-- “Show me the architect's unresolved questions.”
-- “Approve this spec and plan. Continue with implementation.”
-- “Tell the coder to preserve the existing endpoint.”
-- “Resume the account lookup task from the last review.”
+This is an agent-driven process, not a workflow execution engine or enforced sandbox. Agents retain host permissions; prompts do not isolate reviewers or authenticate approvals. Missing usage remains unknown. Git is optional for application work, and committing requires authorization. [Tools and tradeoffs](docs/tools.md) describes these boundaries.
 
-The coordinator inspects the recorded state, handles messages, records your decisions, and explains the next action. It should not hand you helper commands for routine coordination. You can also enter a worker's pane and give feedback directly; that worker reports material changes back to the coordinator.
+## References
 
-Messages are saved in the comms task inbox. Agents check at turn boundaries and can notify peers through Herdr. Participant registration does not prove live availability. Assignment changes atomically save their inbox notifications and evidence; reading acknowledgement, acceptance, and result submission remain distinct. The mailbox alone does not wake idle sessions, and automatic delivery requires the optional [host bridge](comms/delivery.md) running inside Herdr. When notification is unavailable, the coordinator should explain the limitation and request the smallest necessary human action, such as asking a worker to check its inbox.
 
-## What to customize
-
-- `agents/<role>/agent.md`: responsibilities and authority.
-- `agents/<role>/config.json`: runner, native configuration directory, skill paths, and environment references.
-- `agents/<role>/pi/settings.json`: native model/provider selection, thinking, tools, and Pi settings.
-- `agents/<role>/pi/models.json`: custom providers, endpoints, and model definitions.
-- `agents/<role>/pi/mcp.json`: that role's MCP connections and tool exposure.
-- `agents/<role>/skills/`: role-specific guidance.
-- `agents/<role>/scripts/`: tools specific to that role, such as the Go coder's check script. Only helpers shared across roles belong in the top-level `scripts/` directory.
-- `orchestrator/config.json` and `orchestrator/SKILL.md`: coordinator configuration and working agreement.
-- `factories/*.md`: sequences, artifacts, approvals, and checks for different work.
-- `comms/skills/task-comms/`: shared communication skill, imported by all role configurations.
-- `skills/`: shared bounded iteration, conventional commits, evidence-based debugging, Linear context, and Go guidance. Roles explicitly include the skills they need.
-
-The wrapper selects the runner, native configuration directory, skills, and environment references. Model, thinking, tools, providers, and MCPs have one authoritative location in each role's native Pi files. Native `.local.json` overlays can hold personal settings without changing team defaults; credentials remain environment references or explicitly shared private authentication. See [session configuration](orchestrator/README.md).
-
-Skills and prompts are portable text; runner flags, tool registration, and sandboxing are not universal. The supplied adapter prepares Pi sessions. An explicit command adapter can load the same instructions into another CLI. There is no claim of automatic discovery by every agent application.
-
-Reading a role's instructions changes its working guidance; it does not automatically switch the model or register tools in an already running session. The coordinator must use supported native controls or a configured new session when those settings need to be applied.
-
-## Task records and runtime files
-
-Task artifacts live in `.factory/tasks/<UTC-millisecond-timestamp>-<slug>/`: a pointer to the comms task, reviews, progress, and documents. Status, messages, acknowledgements, decisions, events, and usage live in comms. Go tasks start with `spec.html` and `plan.html`; writing tasks choose a document format with the user. Application code belongs in the project's source directories, not in the task directory. HTML files are self-contained templates, with no external scripts. [Task records and recovery](docs/task-records.md) describes each file and how agents resume work.
-
-Private session files and assembled instructions live under `$HOME/.factory/runtime/`, separated by project, task, role, and session. `FACTORY_RUNTIME_DIR` can explicitly override this location. No automatic retention or deletion is performed.
-
-The launcher prepares a writable native profile there, checks local credential readiness and enabled MCP connections, and starts the interactive agent from the project root. Startup failures are recorded for the coordinator. Authored bundle files and global Pi configuration are not rewritten; an explicitly linked private auth file can be updated by Pi's authentication flow.
-
-The included `.gitignore` excludes tasks and local configuration overlays. During installation into a Git project, the coordinator also excludes the plugin's root `.ralph/` runtime directory in the application's root `.gitignore`; a nested toolbox ignore file cannot exclude that sibling. Teams can explicitly version selected task artifacts if appropriate. Keep credentials out of task records and command arguments. There is no automatic redaction of material you paste into a task.
-
-Reviewers must not change application source. This is an instruction boundary, **not an enforced sandbox**: sessions with shell access retain the user's filesystem permissions. Begin with one source-editing agent at a time. No clean branch or Git repository is required, and no commands commit changes.
-
-## Documentation
-
-| Guide | Use it for |
-| --- | --- |
-| [Tools and tradeoffs](docs/tools.md) | External dependencies, included helpers, skills, communication, and operational limits. |
-| [Participants and assignments](comms/coordination.md) | MCP registration, assignment lifecycle, ownership, results, retries, and recovery. |
-| [Comms service](comms/README.md) | Docker Compose, optional storage volumes, agent MCP connections, task/message tools, and reports. |
-| [Setup and troubleshooting](docs/troubleshooting.md) | Prerequisites, corporate-network configuration, failures, updates, and maintainer verification. |
-| [Task records and recovery](docs/task-records.md) | Artifacts, decisions, status, resume, retention, and project boundaries. |
-| [Go factory](factories/golang.md) / [Writing factory](factories/writing.md) | The working agreements for each supplied flow. |
-| [Session configuration](orchestrator/README.md) | Native model/provider, MCP, credential, skill, and runner configuration. |
-| [Coordinator operations](orchestrator/references/operations.md) | Agent-facing helper arguments and bookkeeping. |
-| [Herdr adapter](orchestrator/adapters/herdr/README.md) | Visible pane setup, session naming, and notifications. |
-| [Ralph integration](orchestrator/references/ralph.md) | Bounded coder assignments, feedback, loop controls, and limitations. |
-
-The operation references serve agents and maintainers; users normally work through conversation.
+- [Factory configuration](factories/README.md): membership, paths, ownership, and customization.
+- [Session configuration](orchestrator/README.md): profiles, skills, providers, and MCPs.
+- [Coordinator operations](orchestrator/references/operations.md): agent-facing helpers and bookkeeping.
+- [Participants and assignments](orchestrator/comms/coordination.md): lifecycle, ownership, retries, and recovery.
+- [Setup and troubleshooting](docs/troubleshooting.md): dependencies, failures, and developer tests.
+- [Ralph integration](orchestrator/references/ralph.md): bounded iteration and recovery limits.

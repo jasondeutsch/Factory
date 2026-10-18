@@ -18,30 +18,41 @@ Users can ask their coordinator to configure or repair the setup. The diagnostic
 | Git and network access to the pinned source, or an available local checkout | Obtaining Ralph for a new private profile. | The package declaration is supplied; Pi obtains the code. |
 | `LINEAR_API_KEY` and network access | An enabled Linear connection. | Configuration is supplied, initially disabled. |
 
-Agent work runs on the host in ordinary sessions; no agent image or container sandbox is supplied. The [comms service](../comms/README.md) runs through Docker Compose and is required by the supplied task flow. Its SQLite database is container-local by default. Explicitly mount `/data` for durability across container replacement. No database lives under the host home directory.
+Agent work runs on the host in ordinary sessions; no agent image or container sandbox is supplied. The [comms service](../orchestrator/comms/README.md) runs through Docker Compose and is required by the supplied task flow. It starts comms and the read-only admin panel together, with a shared named SQLite volume that survives container replacement. No database lives under the host home directory.
+
+## Dependency commands
+
+The root [Makefile](../Makefile) provides three targets: `make install`, `make update`, and `make start`. The `start` recipe uses the standalone `docker-compose` executable. It assumes Homebrew is already installed and uses Pi's [official installer](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md#getting-started) for Pi. Update Herdr through Homebrew because this installation path is managed by Homebrew; see [Herdr installation](https://herdr.dev/docs/install/). `make update` uses `pi update self`, intended for installer-managed Pi. If your existing Pi comes from another package manager, update it using that manager instead.
+
+Ensure `pi` and the Go binary directory (`go env GOBIN`, or `$(go env GOPATH)/bin` when empty) are on PATH. Docker/Compose, model credentials, and enabled MCP credentials remain explicit setup. These targets install tools; they do not configure providers, approve work, or start tasks.
+
+The install and update recipes run native Pi package reconciliation against the Go coder's authored profile with project trust disabled. [Pinned packages retain their configured ref](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/packages.md#choose-a-source). Other roles currently declare no extensions. Package caches are ignored by Git and included when preparing that role's private profile. Do not authenticate inside the authored profile or put credentials in its cache.
+
+`make -C .factory start` starts comms and launches the coordinator in that terminal; it requires the installed `.factory/` layout. This unselected bootstrap mode uses the coordinator bundle defaults. For factory-owned coordinator settings, start services and use `.factory/orchestrator/start.sh --factory <name>`, optionally with `--check`. A service launched by this command remains running when you exit the coordinator.
 
 ## First setup through an agent
 
 Ask your agent to copy the toolbox's contents into the application's `.factory/` directory, preserving local customization. It should read the coordinator instructions, select the factory, inspect project instructions and available tools, and configure only the roles being used. Existing global Pi settings are not imported implicitly.
 
-Provide provider/model choices and the **name** of a credential environment variable, not its value in the conversation. Each role can have different provider, base URL, model, thinking level, tools, and MCPs. The coordinator edits team files or ignored local overlays and checks the proposed session before launching it in a visible pane. In a Git project it also excludes root `.ralph/` runtime state from version control.
+Provide provider/model choices and the **name** of a credential environment variable, not its value in the conversation. Each member can have different execution settings in its factory.json config, including native Pi overrides for custom providers and MCPs. The coordinator configures those member entries and checks the selected factory before launching sessions. In a Git project it also excludes root `.ralph/` runtime state from version control.
 
 For example:
 
 > Configure the architect and Go agents for our OpenAI-compatible gateway at `<base URL>`, using `<model ID>` and `TEAM_MODEL_API_KEY`. Keep Linear disabled. Check setup without starting model work, then start a Go task from my request and bring me the spec and plan for approval.
 
-Start the service from `.factory/comms` with `docker compose up --build -d`. Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
+Start the service from `.factory/orchestrator/comms` with `docker compose up --build -d`. Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
 
-Use each role's `start.sh` for consistent startup; it loads its own configuration and skill list through the shared launcher. No task argument starts an unassigned interactive role. The agent can inspect configuration with a launch dry run and test native readiness with `--check`. Checks do not call the model, though MCP checks start processes or contact configured services and loop checks can download the declared plugin. A successful credential check confirms local resolution; the first real model request can still fail remotely.
+Use each role's `start.sh` for consistent startup; the shared launcher resolves the declared member path and loads its configuration and skills. No task argument starts an unassigned interactive role. The agent can inspect configuration with a launch dry run and test native readiness with `--check`. Checks do not call the model, though MCP checks start processes or contact configured services and loop checks can download the declared plugin. A successful credential check confirms local resolution; the first real model request can still fail remotely.
 
 ## Common failures
 
 | Symptom | What to establish and do |
 | --- | --- |
 | Comms unavailable / HTTP 401 | Check Compose health, matching `FACTORY_COMMS_URL`, and token presence in each session. Do not create a local fallback task store. |
-| Task records vanished after `down` | The default database was in the removed container. Local documents cannot restore messages/decisions; use an explicit volume when durability is needed. |
+| Task records are missing | Check the Compose project name and volume. `down -v` deletes task history; ordinary `down` preserves it. Local documents cannot reconstruct a deleted database. |
 | Helpers ask for the project's `.factory` directory | Confirm the toolbox was copied into the intended application root. Do not run task creation from the source toolbox or silently choose a parent project. |
-| Provider or model is unset | Configure the role's native settings and, for a custom provider, its model definition. Check protocol and actual model ID instead of guessing them. |
+| Factory member cannot launch | Check its name and bundle path in `factories/<name>/factory.json`. Paths are relative to that file. A task-bound launch only allows its factory's declared members. |
+| Provider or model is unset | Configure the member's factory.json provider/model and, for a custom provider, its config.pi.models definition. Check protocol and actual model ID instead of guessing them. |
 | Credentials work in one terminal but not an agent pane | Check variable presence and the pane's inherited environment without printing values. The launcher does not source shell startup files. Restart the session with the intended environment or explicitly share its private auth file. |
 | TLS, proxy, or corporate CA failure | Identify whether the failing client is Pi/Node, Git, Go, or the remote service. Apply the organization's trust/proxy setup to that client. The wrapper can map `NODE_EXTRA_CA_CERTS` to an existing variable holding a CA file path; this does not configure Git or Go trust. Keep certificate verification enabled. |
 | gopls is missing or cannot load the module | Check the exact executable, Go version, module/workspace configuration, and command output. Correct the environment or explicitly disable that connection and record the limitation. Do not silently install or upgrade the toolchain. |
@@ -59,22 +70,23 @@ Startup failures after native checking begins create `session_startup_failed` ta
 
 ## Updating the toolbox
 
-Copy changes selectively and preserve team recipes, role configuration, local overlays, and task history. There is no installer, migration engine, or automatic update command. Changes to authored configuration apply to new prepared sessions; existing runtime copies remain separate until native controls or a new session apply the changes. An already running role does not gain a new MCP merely because its source JSON was edited.
+Copy toolkit changes selectively; preserve factory definitions, recipes, role configuration, local overlays, and task history. `make update` updates dependencies, not your toolbox checkout or customizations. Changes to authored configuration apply to new prepared sessions; existing runtime copies remain separate until native controls or a new session apply the changes. An already running role does not gain a new MCP merely because its source JSON was edited.
 
 When changing a role's skill list, retain the desired existing entries: wrapper overlays replace the entire list. Native JSON overlays merge object keys recursively but replace arrays and scalar values. The same replacement rule applies to a native `packages` array. Details and examples live in [session configuration](../orchestrator/README.md).
 
 ## Maintainer checks
 
-From the source toolbox's parent, run:
+From the toolkit root, run:
 
 ```bash
-python3 -B -m unittest discover -s factory/tests -v
+python3 -B -m unittest discover -s orchestrator/tests -v
+python3 -B -m unittest discover -s factories/golang/tests -v
 ```
 
-Inside an application project, use `.factory/tests` instead. Tests build the real comms server with Go (or use `FACTORY_TEST_COMMS` pointing to an existing binary), start isolated localhost servers with disposable databases, and exercise temporary projects and fake agent executables; optional native tests are skipped unless enabled. Set `FACTORY_TEST_PI` to an installed Pi executable for native auth and stdio MCP checks. Also set `FACTORY_TEST_RALPH_DIR` to a checkout of the pinned Ralph revision for its native transition test.
+Infrastructure tests live with the orchestrator; Go-specific tests live with the Go factory. Tests build the real comms server with Go (or use `FACTORY_TEST_COMMS` pointing to an existing binary), start isolated localhost servers with disposable databases, and exercise temporary projects and fake agent executables; optional native tests are skipped unless enabled. Set `FACTORY_TEST_PI` to an installed Pi executable for native auth and stdio MCP checks. Also set `FACTORY_TEST_RALPH_DIR` to a checkout of the pinned Ralph revision for its native transition test.
 
 The Ralph fixture starts a localhost-only HTTP server, supplies deterministic model responses, and calls both a fixture tool and the real comms MCP across fresh sessions. It needs permission to bind localhost but no paid provider or Linear credentials. These checks do not validate live Herdr controls, corporate-network behavior, model quality, or the application's product. Role skills and handoffs still need evaluation through real tasks.
 
 ## Automatic notifications are not arriving
 
-First establish whether the [delivery bridge](../comms/delivery.md) is actually running inside Herdr against the expected project/task and updated comms service. An empty participant `session_ref` intentionally uses manual delivery; a bare name is not a captured binding. Inspect `list_deliveries`, task report, and bridge pane for specific failures. Working/blocked/unknown sessions wait without interruption. `submitted` confirms only host input. Inspect uncertain input before the owner explicitly retries; never recreate assignments to retry a notification. A source update does not rebuild a running comms image or replace existing participant registrations.
+First establish whether the [delivery bridge](../orchestrator/comms/delivery.md) is actually running inside Herdr against the expected project/task and updated comms service. An empty participant `session_ref` intentionally uses manual delivery; a bare name is not a captured binding. Inspect `list_deliveries`, task report, and bridge pane for specific failures. Working/blocked/unknown sessions wait without interruption. `submitted` confirms only host input. Inspect uncertain input before the owner explicitly retries; never recreate assignments to retry a notification. A source update does not rebuild a running comms image or replace existing participant registrations.

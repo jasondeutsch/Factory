@@ -1,0 +1,21 @@
+{
+  "name": "writing",
+  "owner": "pair_writer",
+  "agents": [
+    {
+      "name": "pair_writer",
+      "path": "agents/pair_writer",
+      "config": {}
+    },
+    {
+      "name": "coordinator",
+      "path": "../../orchestrator",
+      "config": {}
+    },
+    {
+      "name": "architecture_reviewer",
+      "path": "../../resources/agents/architecture_reviewer",
+      "config": {}
+    }
+  ]
+}

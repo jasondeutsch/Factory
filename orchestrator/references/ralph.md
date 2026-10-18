@@ -22,7 +22,7 @@ Supply the actual task/assignment IDs and artifact directory as part of that ses
 
 Pi starts in its normal interactive host and receives `/ralph-loop` as its initial native command. The repeated prompt points to this task's durable documents and assignment. The loaded role instructions and skills are supplied through `--append-system-prompt`; Pi reloads them, its native profile, and MCP configuration for replacement sessions. Fresh session transcripts remain under the same private session directory.
 
-The [bounded-iteration skill](../../skills/bounded-iteration/SKILL.md) defines the iteration protocol. One verified item produces `NEXT`; a published implementation handoff produces `COMPLETE`. Blockers and decisions produce `STOP`. The code reviewer independently verifies the result. The coordinator owns overall task completion.
+The [bounded-iteration skill](../../resources/skills/bounded-iteration/SKILL.md) defines the iteration protocol. One verified item produces `NEXT`; a published implementation handoff produces `COMPLETE`. Blockers and decisions produce `STOP`. The code reviewer independently verifies the result. The coordinator owns overall task completion.
 
 ## Visibility and feedback
 
@@ -66,4 +66,4 @@ Use the pinned revision for equivalent behavior. This array replaces the entire 
 
 ## Maintainer verification
 
-The normal test suite checks approval changes, role restrictions, missing plugin commands, optional Linear credentials, and launch arguments with temporary files and fake executables. To additionally exercise the real plugin without paid inference, set `FACTORY_TEST_PI` to an installed Pi executable and `FACTORY_TEST_RALPH_DIR` to the checkout of the pinned plugin, then run the same suite. The opt-in fixture serves deterministic responses on localhost, advances through two fresh iterations, calls a local MCP tool in both, and checks role/skill continuity, project working directories, and private transcript locations. It does not contact Linear or validate live Herdr pane controls.
+The normal test suite checks approval changes, role restrictions, missing plugin commands, optional Linear credentials, and launch arguments with temporary files and fake executables. To additionally exercise the real plugin without paid inference, set `FACTORY_TEST_PI` to an installed Pi executable and `FACTORY_TEST_RALPH_DIR` to the checkout of the pinned plugin, then run `python3 -B -m unittest discover -s factories/golang/tests -v` from the toolkit root. The opt-in fixture serves deterministic responses on localhost, advances through two fresh iterations, calls a local MCP tool in both, and checks role/skill continuity, project working directories, and private transcript locations. It does not contact Linear or validate live Herdr pane controls.
