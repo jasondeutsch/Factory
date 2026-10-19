@@ -1,38 +1,35 @@
 # Coordination verification
 
-Run infrastructure tests from the toolkit root:
+From the toolkit root:
 
 ```sh
-python3 -B -m unittest discover -s orchestrator/tests -v
+npm ci
+npm run check
+npm test
 (cd orchestrator/comms && go test -race ./...)
 ```
 
-For a compact recovery report:
+TypeScript tests build comms with Go and start isolated localhost servers with disposable SQLite databases. They use temporary project copies and terminal fixtures, not the normal Compose service. `FACTORY_TEST_COMMS` may point to an already built comms binary. Set `FACTORY_TEST_PI` to an installed Pi executable to check real native credentials/MCP/extension loading using fixture credentials and no model request. Without it that test is explicitly skipped. Set `FACTORY_TEST_RALPH_DIR` to the pinned plugin checkout as well to run its optional two-iteration test against a local deterministic HTTP model fixture. This exercises plugin transitions, not agent quality.
+
+For an automated recovery report:
 
 ```sh
-python3 -B orchestrator/tests/eval_recovery.py --output /tmp/factory-recovery
+node orchestrator/tests/eval_recovery.ts --output /tmp/factory-recovery
 ```
 
-The report uses a real disposable comms service and deterministic runner/Herdr fixtures. It starts no real agent, consumes no model tokens, changes no application, and does not touch the normal Compose service. `report.json`, `report.html`, and `tests.txt` distinguish measured checks from unverified live behavior. The Go suite additionally checks delivery leases, database reopen/recovery, participant replacement, binding changes, and contact expiry.
+The report includes message-state, contact, retry, attachment, configuration, updater and usage checks. It creates JSON/HTML evidence, not an agent-quality evaluation. Go tests also cover database reopening, assignment transitions, delivery leases, replacement and contact expiry. These tests do not establish real window opening, model behavior, or corporate-network compatibility.
 
-## Live acceptance eval
+## Live acceptance (pending)
 
-This is a separate run inside Herdr, with a human present. Do not turn the automated report into a claim that real sessions worked. Use a disposable application project and the Go factory, configured for the intended provider. Ask it to create a minimal Go tic-tac-toe program. Implementation and product verification belong to the assigned coder and reviewer.
+Use a disposable project and the configured Go factory, with a human present. Keep product implementation and verification with the coder and reviewer.
 
-1. Start comms, run the factory-wide readiness check, and start the coordinator in Herdr. Retain the actual task ID, owner participant ID, and loaded session snapshots.
-2. Use deterministic dispatch for each worker. Confirm the visible pane belongs to the registered participant. Keep human spec/plan decisions explicit; pause for the human unless they delegated them for this run.
-3. Start the delivery bridge in a visible pane after binding the coordinator. Verify assignment and result notifications in both directions while recipients are idle. Inspect acknowledgements, acceptance, and results separately.
-4. Introduce the following faults one at a time, recording expected and observed outcomes. Only interrupt processes created for this eval.
+1. Start the coordinator, create/attach a task, and bind it. Confirm the status shows connected and the snapshot reports native contact.
+2. Dispatch a worker. Verify a visible Herdr pane or Terminal/iTerm window opens with its selected configuration and skills.
+3. Verify assignment and result hints reach idle sessions without manually prompting them. Inspect `sent`, `read`, and `exec` separately from assignment acceptance and submission.
+4. Repeat the same dispatch key. Expect no second window or assignment.
+5. Interrupt the service, then restart with the same database. Expect reconnection, preserved messages and possible repeated hints—not repeated completed work.
+6. Stop a worker. Expect contact expiry and no fabricated completion. Explicitly reconcile/reassign its work before starting a replacement.
+7. Change approved documents before a coder loop starts. Expect the approval guard to refuse them.
+8. Give direct feedback in a worker session. Verify consequential feedback reaches the coordinator.
 
-| Scenario | Expected evidence |
-| --- | --- |
-| Repeat the same dispatch key | Same participant and assignment; no extra pane or duplicate notification |
-| Stop and restart the bridge | Pending messages remain; previously submitted hints are not replayed |
-| Restart comms with its existing database | Tasks, assignments, snapshots and delivery claims survive |
-| Interrupt a worker | Contact expires or becomes unavailable; assignment does not become completed or silently transfer |
-| Explicitly replace that worker | Old assignment is reconciled/cancelled by the owner; new work names the new participant |
-| Change an approved document before a coder loop starts | Startup refuses stale approval; human decision is requested again |
-| Leave a result unsubmitted | Coordinator reports incomplete handoff; check events alone do not count as a result |
-| Give an agent direct feedback | It records consequential feedback and informs the coordinator |
-
-For each scenario retain the task report URL, relevant record IDs, timestamps, runtime versions, actual intervention, recovery duration, and outcome. Preserve failures. Do not repair application code or supply missing agent results yourself. Usage is unknown unless measured records were submitted. End with a report separating automated checks, live observations, limitations, and new issues.
+Retain IDs, timestamps, actual interventions, runtime versions, errors and recovery duration. Human approval stays with the user unless explicitly delegated. Do not compensate for a broken handoff by doing the agent's work yourself. Record automated checks and live observations separately.

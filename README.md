@@ -15,7 +15,7 @@ docs/               # Setup, troubleshooting, and tool tradeoffs
 
 **Each factory's `factory.json` declares its member names, bundle paths, and task owner.** Its `README.md` describes how those members work together. Directory placement does not define membership. See the [configuration reference](factories/README.md), [Go configuration](factories/golang/factory.json), and [writing configuration](factories/writing/factory.json).
 
-`factory.json` is the single authored configuration source: set shared execution choices in `defaults`, define providers/MCPs/extensions once, and override only what differs for a member. Agent directories hold instructions, skills, and scripts. [How configuration reaches Pi](orchestrator/README.md#how-configuration-reaches-pi) explains how `session.py` generates each agent's private native files.
+`factory.json` is the single authored configuration source: set shared execution choices in `defaults`, define providers/MCPs/extensions once, and override only what differs for a member. Agent directories hold instructions, skills, and scripts. [How configuration reaches Pi](orchestrator/README.md#how-configuration-reaches-pi) explains how `session.ts` generates each agent's private native files.
 
 ## Install in a project
 
@@ -23,7 +23,9 @@ Copy this directory's contents into `.factory/` at the application root, preserv
 
 > Install `/path/to/factory` into this project's `.factory/` directory. Read its README and coordinator skill. Configure the Go factory for our provider and model; keep credentials in environment variables.
 
-With Homebrew already available, install only the factory you need: `make -C factories/golang install` or `make -C factories/writing install`. Each includes the shared coordinator dependencies. The root `make install` installs only Herdr, Git, Go (for the delivery bridge), Python, Pi, and comms Go dependencies. The Go factory additionally installs golangci-lint, gopls, and the coder's pinned Ralph extension; writing adds no extra dependencies. Use `update` in the same directory to update that set. Install Docker with Compose separately. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites and corporate-network configuration.
+With Homebrew already available, install only the factory you need: `make -C factories/golang install` or `make -C factories/writing install`. Each includes the shared coordinator dependencies. The root `make install` installs only Herdr, Git, Go, Node.js 22.18+ (for the TypeScript helpers), Pi, and the npm/comms dependencies. The Go factory additionally installs golangci-lint, gopls, and the coder's pinned Ralph extension; writing adds no extra dependencies. Use `update` in the same directory to update that set. Install Docker with Compose separately. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites and corporate-network configuration.
+
+The launchers require Node.js 22.18+ and the locked npm dependencies in each toolkit copy (`npm ci --omit=dev`). The Makefile installs those dependencies.
 
 The examples select `team-gateway` and `your-model-id` in `defaults`, with a placeholder URL and `${TEAM_MODEL_API_KEY}` in `providers`. Replace these shared values once, then add member overrides only when needed. See the [factory reference](factories/README.md). The Go coder and reviewer also need gopls with MCP support.
 
@@ -35,7 +37,7 @@ From the application root, select the factory whose coordinator settings should 
 .factory/orchestrator/start.sh --factory golang
 ```
 
-The entrypoint starts local Compose services and waits for MCP connectivity. Set `FACTORY_COMMS_URL` to use an existing service without managing Compose. Run inside Herdr for visible panes and a supervised delivery bridge; outside Herdr it explicitly reports that inbox polling is required. The bridge stops when the coordinator exits; Compose services remain running. No task or worker starts automatically. `make -C .factory start FACTORY=golang` is the equivalent shortcut. Factory selection is explicit; there is no global coordinator configuration.
+The entrypoint starts local Compose services and waits for MCP connectivity. Set `FACTORY_COMMS_URL` to use an existing service without managing Compose. Pi sessions load a native inbox extension that polls independently of model turns. Choose Herdr panes or macOS Terminal/iTerm windows with `FACTORY_TERMINAL_HOST`. Compose stays running when the coordinator exits. No task or worker starts automatically. `make -C .factory start FACTORY=golang` is the equivalent shortcut. Factory selection is explicit; there is no global coordinator configuration.
 
 You can also use an existing agent as coordinator: read `.factory/orchestrator/SKILL.md`, connect its native MCP client to `http://127.0.0.1:8090/mcp`, and reload it. Reading a skill alone does not register tools. The supplied factories select this connection for their members.
 
@@ -59,7 +61,7 @@ Ask the coordinator for progress, unresolved questions, evidence, or the task re
 
 Each bundle has a thin `start.sh` for manual startup. An explicit task-directory argument binds the session to that task's factory. `--dry-run` previews configuration; `--check` checks native readiness without model inference. See [agent startup](orchestrator/README.md#start-a-role).
 
-Stored messages do not wake idle agents by themselves. The optional [Herdr delivery bridge](orchestrator/comms/delivery.md) supplies background inbox hints. Manual inbox checks remain available. Notification, reading, assignment acceptance, and submitted results are separate records.
+Pi's [native delivery extension](orchestrator/comms/delivery.md) brings inbox notifications into running sessions. It works independently of the terminal host. Message states are **sent → read → exec**; execution means the recipient declared it began acting, not that the work finished. A stopped process still needs to be restarted by its host. Other runners can implement the same MCP contract or check inboxes manually.
 
 ## Records and limits
 

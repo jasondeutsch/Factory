@@ -18,8 +18,8 @@ func TestHerdrAdapterUsesExplicitBindingAndKnownReadiness(t *testing.T) {
 	responsePath := filepath.Join(directory, "response.json")
 	argsPath := filepath.Join(directory, "args.json")
 	executable := filepath.Join(directory, "herdr-fixture")
-	// Python is already a Factory prerequisite. This fixture has no Herdr socket.
-	script := "#!/usr/bin/env python3\nimport json,sys\njson.dump(sys.argv[1:],open(" + pythonString(argsPath) + ",'w'))\nprint(open(" + pythonString(responsePath) + ").read())\n"
+	// Node.js is already a Factory prerequisite. This fixture has no Herdr socket.
+	script := "#!/usr/bin/env node\nconst fs=require('node:fs');fs.writeFileSync(" + jsString(argsPath) + ",JSON.stringify(process.argv.slice(2)));console.log(fs.readFileSync(" + jsString(responsePath) + ",'utf8'));\n"
 	require.NoError(t, os.WriteFile(executable, []byte(script), 0700))
 	host := Herdr{Binary: executable}
 	binding := Binding{Adapter: "herdr", WorkspaceID: "w1", PaneID: "w1:p2", TerminalID: "terminal-2", Name: "coder"}
@@ -87,7 +87,7 @@ func TestHerdrAdapterUsesExplicitBindingAndKnownReadiness(t *testing.T) {
 	_, err = host.Bind(t.Context(), "coder")
 	require.ErrorContains(t, err, "Herdr-managed")
 }
-func pythonString(value string) string { encoded, _ := json.Marshal(value); return string(encoded) }
+func jsString(value string) string { encoded, _ := json.Marshal(value); return string(encoded) }
 func TestHerdrErrorsAndMalformedReferences(t *testing.T) {
 	t.Setenv("HERDR_ENV", "1")
 	_, err := (Herdr{Binary: "/does/not/exist"}).Bind(t.Context(), "coder")
@@ -104,11 +104,11 @@ func TestHerdrErrorsAndMalformedReferences(t *testing.T) {
 func TestHerdrTimeoutAndStructuredFailure(t *testing.T) {
 	t.Setenv("HERDR_ENV", "1") // Isolated fixture executable only.
 	fixture := filepath.Join(t.TempDir(), "herdr-fixture")
-	require.NoError(t, os.WriteFile(fixture, []byte("#!/usr/bin/env python3\nimport sys,json\nprint(json.dumps({'id':'test','error':{'code':'agent_not_found','message':'private content'}}),file=sys.stderr)\nsys.exit(1)\n"), 0700))
+	require.NoError(t, os.WriteFile(fixture, []byte("#!/usr/bin/env node\nconsole.error(JSON.stringify({id:'test',error:{code:'agent_not_found',message:'private content'}}));process.exit(1);\n"), 0700))
 	_, err := (Herdr{Binary: fixture}).Bind(t.Context(), "coder")
 	require.ErrorContains(t, err, "agent_not_found")
 	assert.NotContains(t, err.Error(), "private content")
-	require.NoError(t, os.WriteFile(fixture, []byte("#!/usr/bin/env python3\nimport time\ntime.sleep(10)\n"), 0700))
+	require.NoError(t, os.WriteFile(fixture, []byte("#!/usr/bin/env node\nsetTimeout(()=>{},10000);\n"), 0700))
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	started := time.Now()

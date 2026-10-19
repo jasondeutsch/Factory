@@ -7,11 +7,11 @@ Users can ask their coordinator to configure or repair the setup. The diagnostic
 | Requirement | When needed | Supplied by Factory? |
 | --- | --- | --- |
 | Docker Compose and a reachable comms service | Shared task records and the supplied MCP connections. | Compose deployment is supplied; SQLite is embedded in its container. |
-| Python 3.10+ | Task and session helpers. | No; the helpers use only its standard library. |
+| Node.js 22.18+ | Task and session helpers. | Install Node and run `npm ci --omit=dev` in the toolkit for its SDK/runtime dependencies. |
 | Pi with the native configuration, auth, MCP, and extension commands used here | New sessions using the provided Pi adapter. | No; an installed runner is required. Another CLI needs an explicit command adapter. |
 | Selected provider, actual model ID, and credentials | Each new configured model session. | No; replace the clearly labeled gateway/model examples in the factory defaults/provider definitions and any member overrides. |
 | Go 1.26 | Build/run the optional host delivery bridge (a built binary avoids the runtime toolchain). | No, unless running the bridge from source. |
-| Herdr | Automated visible pane controls and notifications. | No; manual sessions remain possible. |
+| Herdr or macOS Terminal/iTerm | Automated visible agent sessions. | Select with `FACTORY_TERMINAL_HOST`; manual startup remains possible elsewhere. |
 | Go and project dependencies | Implementing and verifying Go code. | No. |
 | gopls with MCP support | Enabled coder/reviewer gopls connections. | No; disable explicitly if the task will proceed without it. |
 | golangci-lint and `gofmt` on PATH | The optional Go check script. | No; use versions compatible with the project. |
@@ -30,7 +30,7 @@ make -C .factory/factories/golang install
 make -C .factory/factories/golang update
 ```
 
-Use `writing` instead of `golang` for the writing factory. In the toolkit source checkout, omit `.factory/` from these paths. Each factory calls the root shared target before its own commands. The root [Makefile](../Makefile) installs Herdr, Git, Go for the host bridge, Python, Pi for the supplied coordinator, and comms Go dependencies. Writing currently needs only that shared set. Go adds golangci-lint, gopls, and the coder's declared Ralph extension. These commands install on the host; they do not isolate versions between factories. Review project toolchain constraints before upgrading.
+Use `writing` instead of `golang` for the writing factory. In the toolkit source checkout, omit `.factory/` from these paths. Each factory calls the root shared target before its own commands. The root [Makefile](../Makefile) installs Herdr, Git, Go, Node.js 22.18+, Pi for the supplied coordinator, and comms Go dependencies. Writing currently needs only that shared set. Go adds golangci-lint, gopls, and the coder's declared Ralph extension. These commands install on the host; they do not isolate versions between factories. Review project toolchain constraints before upgrading.
 
 Homebrew must already be installed. Pi uses its [official installer](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md#getting-started). Updates use Homebrew for its managed tools and `pi update self` for installer-managed Pi. If your Pi comes from another package manager, use that manager instead. Factory Makefiles remain explicit commands for host tools; the Go extension-install helper reads its coder's selected packages from `factory.json`. Update them when customizing the agents' tools or runners.
 
@@ -70,7 +70,7 @@ Use each role's `start.sh` for consistent startup; the shared launcher resolves 
 | Ralph command is unavailable or plugin download fails | Inspect private startup diagnostics. Check source access and the pinned package declaration, or configure an existing local checkout. The application itself need not be a Git repository. |
 | `--loop` refuses approval | Compare current HTML hashes and the latest artifact-specific decisions. Present any changed documents for the actual required decision. Do not manufacture approval to clear the error. |
 | A startup check times out | Identify the slow check and its output. Use `check_timeout_seconds` only when the work is legitimately slow; raising it does not fix missing credentials or a hung service. Each process check defaults to 30 seconds, configurable up to 300. |
-| A message was saved but notification failed | Retain the message ID. Inspect the recipient's live session and attempt notification again without duplicating the assignment. Herdr control must originate inside `HERDR_ENV=1`. |
+| A message was saved but notification failed | Retain the message ID. Inspect the recipient extension's binding and connection, then retry without duplicating the assignment. |
 | A pane looks idle or progress is stale | Inspect the task inbox, progress file, live terminal output, and any loop state. Determine whether the agent is waiting, failed, reached its limit, or completed. Do not mark success from terminal appearance. |
 | A loop reaches its limit or repeats a failure | Preserve partial work and evidence. Reassess with the coordinator; use native resume only for the correct task and a justified assignment. Human decisions and unresolved environment failures should stop the loop. |
 | Task status says cancelled but work continues | Stop the active runner through native controls. Status is a record, not a process-control signal. Inspect partial changes afterward. |
@@ -86,19 +86,12 @@ When changing a role's skill list, retain the desired existing entries: wrapper 
 
 ## Maintainer checks
 
-From the toolkit root, run:
-
-```bash
-python3 -B -m unittest discover -s orchestrator/tests -v
-python3 -B -m unittest discover -s factories/golang/tests -v
-```
-
-Infrastructure tests live with the orchestrator; Go-specific tests live with the Go factory. Tests build the real comms server with Go (or use `FACTORY_TEST_COMMS` pointing to an existing binary), start isolated localhost servers with disposable databases, and exercise temporary projects and fake agent executables; optional native tests are skipped unless enabled. Set `FACTORY_TEST_PI` to an installed Pi executable for native auth and stdio MCP checks. Also set `FACTORY_TEST_RALPH_DIR` to a checkout of the pinned Ralph revision for its native transition test.
-
-The Ralph fixture starts a localhost-only HTTP server, supplies deterministic model responses, and calls both a fixture tool and the real comms MCP across fresh sessions. It needs permission to bind localhost but no paid provider or Linear credentials. These checks do not validate live Herdr controls, corporate-network behavior, model quality, or the application's product. Role skills and handoffs still need evaluation through real tasks.
+Run `npm ci`, `npm run check`, and `npm test` at the toolkit root, then `go test -race ./...` in `orchestrator/comms`. See [verification](../orchestrator/tests/README.md) for native checks and their limits.
 
 ## Automatic notifications are not arriving
 
-First establish whether the [delivery bridge](../orchestrator/comms/delivery.md) is actually running inside Herdr against the expected project/task and updated comms service. An empty participant `session_ref` intentionally uses manual delivery; a bare name is not a captured binding. Inspect `list_deliveries`, task report, and bridge pane for specific failures. Working/blocked/unknown sessions wait without interruption. `submitted` confirms only host input. Inspect uncertain input before the owner explicitly retries; never recreate assignments to retry a notification. A source update does not rebuild a running comms image or replace existing participant registrations.
+Inspect the Pi status line and `/factory-inbox`. Confirm the session was bound with `factory_bind_task`, or started with its explicit task directory. `get_session` must show native delivery with recent contact. An expired heartbeat can mean a stopped process, outage, or failed adapter; it is not proof of completion.
 
-For the same running instance, capture its actual Herdr reference and use `bind_participant` to attach it to the existing participant. Supply the current reference as `expected_session_ref`; reread on conflict. Do not replace a participant just to attach a host binding, because assignments belong to its participant ID. A genuinely new process still requires explicit replacement and assignment recovery.
+The service image must include `execute_message` and `record_runner_contact`; rebuild Compose after source updates. Verify the selected profile loads the extension with `--check`. `npm ci --omit=dev` installs its local dependencies. Do not use terminal injection to conceal a disconnected extension. Retain message IDs; reconnect/retry does not require another assignment.
+
+Native Terminal/iTerm windows need credentials and service variables in their shell environment. Variables exported only in the coordinator shell are not automatically transferred to another terminal application. Keep secrets out of `.command` files and factory configuration.

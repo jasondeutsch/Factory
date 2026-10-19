@@ -1,11 +1,11 @@
 # Team customization and toolkit updates
 
-Keep one `.factory/` directory in the application repository. No upstream subdirectory, remote registry, or package manager is needed.
+Keep one `.factory/` directory in the application repository. No upstream subdirectory or toolkit registry is needed. Node dependencies are installed separately with npm.
 
 | Area | Ownership |
 | --- | --- |
 | `factories/` | Team-owned recipes, member configuration, custom agents and skills. Seeded once on install; never overwritten by toolkit updates. |
-| `orchestrator/`, `resources/`, `docs/`, root README/Makefile/gitignore | Toolkit-owned defaults. Updates replace only files whose local version matches the recorded baseline. |
+| `orchestrator/`, `resources/`, `docs/`, root README/Makefile/gitignore/package files/tsconfig | Toolkit-owned defaults. Updates replace only files whose local version matches the recorded baseline. |
 | Auth/trust files, environment files, `*.local.json` | Private files excluded from source copying and managed updates; not configuration layers. |
 | `tasks/`, runtime directories and databases | Execution data; never synchronized. |
 | `.toolkit.json` | Hash baseline for managed files; retain it with the copied toolkit. No configuration or credentials. |
@@ -14,14 +14,14 @@ Customize member model/provider/MCP/tool settings through its `factory.json` ent
 
 ## Install
 
-From the source Factory checkout, preview and then apply:
+From the source Factory checkout, run `npm ci --omit=dev`, then preview and apply:
 
 ```sh
-python3 orchestrator/scripts/sync_toolkit.py /path/to/project/.factory
-python3 orchestrator/scripts/sync_toolkit.py /path/to/project/.factory --apply
+node orchestrator/scripts/sync_toolkit.ts /path/to/project/.factory
+node orchestrator/scripts/sync_toolkit.ts /path/to/project/.factory --apply
 ```
 
-The project directory must already exist. A new install copies supplied factories once and publishes a complete staged directory. Source Git metadata, dependency caches, known auth/trust files, `.env*` files, local JSON overrides and task data are excluded. Do not embed credential values in portable configuration. The script does not install dependencies or start services.
+The project directory must already exist. A new install copies supplied factories once and publishes a complete staged directory. Source Git metadata, dependency caches, known auth/trust files, `.env*` files, local JSON overrides and task data are excluded. Do not embed credential values in portable configuration. The script does not install dependencies or start services. Run `npm ci --omit=dev` in the installed `.factory/` before launching it, and again after package-lock changes.
 
 ## Update
 

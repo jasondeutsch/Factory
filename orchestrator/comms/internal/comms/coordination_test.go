@@ -285,7 +285,7 @@ func TestSchemaOneUpgradePreservesExistingEvidence(t *testing.T) {
 	message, err := store.SendMessage(t.Context(), SendMessageInput{TaskID: task.ID, Sender: "architect", Recipient: "coordinator", Kind: "result", Text: "Old evidence"})
 	require.NoError(t, err)
 	// Restore exactly the original table shape/version before reopening.
-	_, err = store.db.Exec("DROP TABLE deliveries; ALTER TABLE messages DROP COLUMN assignment_id; DROP TABLE coordination_requests; DROP TABLE assignments; DROP TABLE participants; PRAGMA user_version=1;")
+	_, err = store.db.Exec("DROP TABLE deliveries; ALTER TABLE messages DROP COLUMN assignment_id; DROP TABLE coordination_requests; DROP TABLE assignments; DROP TABLE participants; ALTER TABLE messages DROP COLUMN executed_at; PRAGMA user_version=1;")
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
 	store, err = Open(path)

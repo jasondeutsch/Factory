@@ -56,8 +56,8 @@ func Open(path string) (*Store, error) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return failed(err)
 	}
-	if version > 7 {
-		return failed(fmt.Errorf("database schema %d is newer than supported schema 7", version))
+	if version > 8 {
+		return failed(fmt.Errorf("database schema %d is newer than supported schema 8", version))
 	}
 	if err := initializeSchema(ctx, db, version); err != nil {
 		return failed(err)
@@ -84,7 +84,12 @@ func initializeSchema(ctx context.Context, db *sql.DB, version int) error {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=7"); err != nil {
+	if version < 8 {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE messages ADD COLUMN executed_at TEXT"); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=8"); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -127,7 +132,7 @@ func pageLimit(value, fallback, maximum int) (int, error) {
 }
 
 const taskColumns = "sequence,id,project,name,brief,owner,status,summary,version,created_at,updated_at"
-const messageColumns = "id,task_id,sender,recipient,kind,text,created_at,acknowledged_at,assignment_id"
+const messageColumns = "id,task_id,sender,recipient,kind,text,created_at,acknowledged_at,assignment_id,executed_at"
 const eventColumns = "sequence,task_id,actor,kind,stage,attempt,message,data,created_at"
 
 type scanner interface{ Scan(...any) error }
@@ -143,8 +148,15 @@ func scanTask(row scanner) (Task, error) {
 func scanMessage(row scanner) (Message, error) {
 	var message Message
 	var assignmentID sql.NullString
-	err := row.Scan(&message.ID, &message.TaskID, &message.Sender, &message.Recipient, &message.Kind, &message.Text, &message.CreatedAt, &message.AcknowledgedAt, &assignmentID)
+	err := row.Scan(&message.ID, &message.TaskID, &message.Sender, &message.Recipient, &message.Kind, &message.Text, &message.CreatedAt, &message.AcknowledgedAt, &assignmentID, &message.ExecutedAt)
 	message.AssignmentID = assignmentID.String
+	message.Status = "sent"
+	if message.AcknowledgedAt != nil {
+		message.Status = "read"
+	}
+	if message.ExecutedAt != nil {
+		message.Status = "exec"
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errMessageNotFound
 	}
@@ -365,6 +377,7 @@ func (s *Store) Acknowledge(ctx context.Context, input AcknowledgeInput) (Messag
 		return Message{}, err
 	}
 	message.AcknowledgedAt = &at
+	message.Status = "read"
 	return message, tx.Commit()
 }
 

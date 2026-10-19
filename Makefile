@@ -1,13 +1,15 @@
 .PHONY: install update start
 
 install:
-	brew install herdr git go python
+	brew install herdr git go node
 	curl -fsSL https://pi.dev/install.sh | sh
+	npm ci --omit=dev
 	cd orchestrator/comms && go mod download
 
 update:
-	brew upgrade herdr git go python
+	brew upgrade herdr git go node
 	pi update self
+	npm ci --omit=dev
 	cd orchestrator/comms && go mod download
 
 start:

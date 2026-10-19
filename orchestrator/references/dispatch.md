@@ -1,6 +1,6 @@
 # Dispatch one assignment
 
-The coordinator uses `orchestrator/dispatch.py` inside Herdr to open a visible member session, discover its actual participant, bind it, create an assignment, and check notification delivery. The coordinator still chooses what happens next. This operation does not implement a workflow, grant approvals, or start a Ralph loop.
+The coordinator uses `orchestrator/dispatch.ts` to open a visible member session through the configured terminal host, discover its actual participant, create an assignment, and check native delivery contact. The coordinator still chooses what happens next. This operation does not implement a workflow, grant approvals, or start a Ralph loop.
 
 Write the intended assignment as JSON in the task's documents, for example:
 
@@ -16,17 +16,17 @@ Write the intended assignment as JSON in the task's documents, for example:
 }
 ```
 
-From the coordinator's pane, substitute actual paths and the active owner participant ID:
+From the coordinator's session, substitute actual paths and the active owner participant ID:
 
 ```sh
-python3 .factory/orchestrator/dispatch.py <task-directory> \
+node .factory/orchestrator/dispatch.ts <task-directory> \
   --request <assignment.json> --key design-1 --owner <owner-participant-id> \
   --direction right
 ```
 
 Use `down` for a narrow pane. The caller keeps focus. Required provider environment variables must already be available in the new pane's environment. The helper never sources shell startup files or puts credentials in the launch command.
 
-The JSON receipt contains the pane, actual participant, assignment ID, phase, and any error. `notification_checked` confirms a delivery check, not reading, acceptance, or completion. Inspect canonical assignment state through comms. Supply the coordinator's known live name in assignment context or bind the coordinator and run the background bridge for result notifications.
+The JSON receipt contains the host, pane (when applicable), actual participant, assignment ID, phase, and any error. `native_delivery_ready` means the adapter reported fresh idle/working contact; it does not mean the message was read or accepted. `manual_delivery` explicitly means this runner still needs an adapter or manual inbox checks. No terminal input is used to deliver Pi messages.
 
 ## Recovery
 
@@ -35,13 +35,13 @@ Repeat the same command with the same `--key` and unchanged assignment. Receipts
 - **Lost pane-creation response:** inspect Herdr. If the new empty pane exists, retry with `--recover-pane <actual-id>`. This is explicit operator confirmation; the helper does not guess or split again.
 - **Lost launch response or startup failure:** the helper looks for the exact instance it launched. It never repeats the launch command. Inspect the visible pane and startup diagnostics. If that instance failed, reconcile it and authorize a fresh dispatch rather than assigning a stopped process.
 - **Lost assignment response:** comms replays the same idempotent creation. A retry does not create another assignment.
-- **Busy agent:** the assignment remains saved. Let the bound bridge deliver when idle, or retry the same dispatch after the agent settles.
-- **Uncertain notification:** inspect `list_deliveries` and the actual pane before the owner uses `retry_delivery`. Repeating dispatch alone cannot clear uncertainty.
+- **Busy agent:** the assignment remains saved. The Pi extension queues its hint when idle; contact remains separate from reading.
+- **Disconnected adapter:** inspect Pi's comms status and service reachability. Retry the same dispatch after recovery; do not duplicate the assignment or inject a competing prompt.
 - **Changed/retired session:** stop and reconcile ownership. Dispatch never silently transfers work or overwrites a different binding.
 
-For an already running instance, pass both `--reuse-participant <id>` and `--agent <actual-name>`. Its recorded binding must already match the live session. Bind it explicitly with `bind_participant` first if needed. A live name alone is not proof of identity.
+For an already running instance, pass `--reuse-participant <id>`. It must have the requested role and fresh idle native contact. A live terminal name alone is not proof of identity. Reuse does not reset assignment history.
 
-For manual or unsupported hosts, use the [session launcher](../README.md) and comms assignment tools directly. The service itself cannot operate host panes. Deterministic fixtures cover retries and failure boundaries; real Herdr acceptance remains a separate [live eval](../tests/README.md).
+For Terminal/iTerm, opening a window has no returned pane identifier. An uncertain launch is preserved for inspection and never automatically repeated. Other hosts can use the [session launcher](../README.md) and comms tools manually. Automated fixtures exercise retry boundaries; [live terminal acceptance](../tests/README.md) remains separate.
 
 ## Handoff evidence
 

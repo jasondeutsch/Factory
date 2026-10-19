@@ -162,7 +162,7 @@ func TestSchemaTwoDeliveryUpgrade(t *testing.T) {
 	s, err := Open(path)
 	require.NoError(t, err)
 	task := testTask(t, s, "old")
-	_, err = s.db.Exec("ALTER TABLE assignments DROP COLUMN handoff; DROP TABLE deliveries; PRAGMA user_version=2")
+	_, err = s.db.Exec("ALTER TABLE assignments DROP COLUMN handoff; DROP TABLE deliveries; ALTER TABLE messages DROP COLUMN executed_at; PRAGMA user_version=2")
 	require.NoError(t, err)
 	require.NoError(t, s.Close())
 	s, err = Open(path)

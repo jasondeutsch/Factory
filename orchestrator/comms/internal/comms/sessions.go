@@ -17,6 +17,7 @@ type SkillSnapshot struct {
 	SHA256 string `json:"sha256"`
 }
 type SessionManifest struct {
+	Delivery                 string          `json:"delivery,omitempty"`
 	Runner                   string          `json:"runner"`
 	Provider                 string          `json:"provider,omitempty"`
 	Model                    string          `json:"model,omitempty"`
@@ -54,6 +55,9 @@ type SessionSnapshot struct {
 var digest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func (s *Store) RecordSession(ctx context.Context, in RecordSessionInput) (SessionSnapshot, error) {
+	if !oneOf(in.Manifest.Delivery, "", "native", "manual") {
+		return SessionSnapshot{}, errors.New("delivery must be native or manual")
+	}
 	if in.Manifest.Runner == "" || !digest.MatchString(in.Manifest.ConfigurationFingerprint) {
 		return SessionSnapshot{}, errors.New("runner and SHA256 configuration fingerprint are required")
 	}

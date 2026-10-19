@@ -118,11 +118,11 @@ For example, ask a connected coordinator:
 
 > Read `.factory/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep the spec, plan, and review artifacts in the repository. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
 
-The orchestrator creates and retains the task ID, reuses the actual launcher registrations (or registers its own existing instance), creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents read their inbox at turn/iteration boundaries, acknowledge messages, and publish evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no agent scheduler. The optional [host bridge](delivery.md) provides background inbox notification; it must actually be running.
+The orchestrator creates and retains the task ID, reuses the actual launcher registrations (or registers its own existing instance), creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents retrieve messages, acknowledge `read`, explicitly declare `exec` before acting, and publish assignment evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no agent scheduler. The [native Pi adapter](delivery.md) handles background inbox hints; other runners can implement its MCP contract.
 
 Artifacts remain client-managed files. A decision event can include `data.outcome`, `data.artifacts` with paths and hashes, and a rationale in `message`. Check evidence can include commands, exit status, output references, tool versions, and MCP names. These values are submitted claims; the server does not inspect host files, run checks, validate artifact hashes, or grant approval. Secrets should never be included in event/message bodies; no automatic redaction is performed.
 
-**Factory integration:** all six roles reference [skills/task-comms](skills/task-comms/SKILL.md) from their configuration; the launcher loads that skill and a native connection. The Python task helpers use the same MCP tools through [client.py](client.py), a narrow client for this service's stateless JSON transport. They do not open SQLite or maintain separate task state. Native agent clients remain the preferred interface.
+**Factory integration:** all six roles reference [skills/task-comms](skills/task-comms/SKILL.md) from their configuration; the launcher loads that skill and a native connection. The TypeScript helpers use the same MCP tools through the [official SDK wrapper](../lib/client.ts). They do not open SQLite or maintain separate task state. Native agent clients remain the preferred interface.
 
 The local `task.json` links a document directory to a service task ID and explicit project. Use `create_task` then the artifact helper's `attach` operation when working through native MCP. The launch approval guard reads comms decision events and checks current local HTML hashes. Old file-only task records are not silently imported. See [coordinator operations](../references/operations.md).
 
@@ -153,7 +153,7 @@ Totals cover the entire task. The browser timeline shows at most the latest 500 
 | `COMMS_ADMIN_PORT` | `8091` | Optional SQLite Web panel loopback port. |
 | `FACTORY_COMMS_URL` | `http://127.0.0.1:8090/mcp` | Client/launcher endpoint; does not configure the server listener. |
 
-Go flags override the corresponding environment setting. The `health` argument checks the listener's `/healthz` endpoint and is used by Compose. No application repository mount is required. Schema 2 is initialized on startup. Existing schema-1 tasks/messages/events are upgraded transactionally without discarding evidence; legacy prose messages do not automatically become canonical assignments. A newer unsupported schema fails rather than being silently rewritten.
+Go flags override the corresponding environment setting. The `health` argument checks the listener's `/healthz` endpoint and is used by Compose. No application repository mount is required. Schema 8 is initialized on startup. Existing databases are upgraded transactionally without discarding evidence. A newer unsupported schema fails rather than being silently rewritten.
 
 From this directory, with Go 1.26+ installed:
 
@@ -169,7 +169,7 @@ For the surrounding agent setup, see the [Factory README](../../README.md).
 
 ## Optional host delivery
 
-The [delivery bridge](delivery.md) wakes eligible idle Herdr recipients through recorded session bindings. It uses the official Go MCP client, keeps notification attempts in this service's SQLite database, and leaves assignment decisions to agents. The report includes delivery state and failures. Manual delivery remains supported. Rebuild the comms image when updating to these tools/schema; source changes alone do not update an existing container.
+The optional [Herdr fallback bridge](herdr-delivery.md) wakes eligible idle Herdr recipients through recorded session bindings. It uses the official Go MCP client, keeps notification attempts in this service's SQLite database, and leaves assignment decisions to agents. The report includes delivery state and failures. Manual delivery remains supported. Rebuild the comms image when updating to these tools/schema; source changes alone do not update an existing container.
 
 Bridge operations: `claim_delivery`, `finish_delivery`, `list_deliveries`, and task-owner `retry_delivery`. Notification submission is separate from reading, acceptance, and results. See the delivery reference for reservation, backoff, uncertain outcomes, restart recovery, and live validation.
 
@@ -180,7 +180,7 @@ Bridge operations: `claim_delivery`, `finish_delivery`, `list_deliveries`, and t
 
 The launcher records instruction/skill paths and hashes, model/provider/thinking, runner, MCP names, preparation time, and native-check status. It excludes credential values and raw profiles. The configuration fingerprint represents public instruction/model/tool selections, not every native option. A retired participant or expired observation reads as `unknown`; keep assignment progress and results separate. These are declared observations, not per-agent authentication or proof of useful work.
 
-Rebuild/restart comms to expose the new tools; schema 4 adds session snapshots while preserving existing records. Restart the host bridge to enable contact sampling. Existing sessions without a recorded manifest remain unobserved until explicitly relaunched; do not invent a historical snapshot from current source files.
+Rebuild/restart comms to expose the updated tools. Native adapters use `record_runner_contact` with the exact active instance ID and a manifest declaring `delivery: native`; no terminal binding is required. Its contact also expires after 30 seconds. Existing sessions without a recorded manifest remain unobserved until explicitly relaunched; do not invent a historical snapshot from current source files.
 
 ## Live task status
 
@@ -201,9 +201,13 @@ Only the declared task owner records `resolve_attention`, using the current vers
 The Pi adapter provides a repeatable, explicit importer:
 
 ```sh
-python3 .factory/orchestrator/adapters/pi/import_usage.py <task-directory> \
+node .factory/orchestrator/adapters/pi/import_usage.ts <task-directory> \
   --session <private-runtime-instance/session.jsonl> \
   --participant <participant-id> --assignment <assignment-id>
 ```
 
 It reads Pi v3 session records, verifies the runtime instance and single-assignment attribution, and deduplicates by participant/session/entry ID. It attributes the session's assistant requests, including startup overhead, to that sole assignment. Cache input is included once; reasoning is already in output. It rejects incomplete records and inconsistent counts. It does not import tool/compaction usage, estimate unreported tokens, or treat Pi's locally estimated price as billed cost. Coverage is therefore partial, explicitly reported, and cost remains unknown. Other runtimes use `record_usage` directly with stable request keys.
+
+## Message execution state
+
+`execute_message` takes `task_id`, `message_id`, and `actor` (the declared recipient). It requires a prior read acknowledgement and is idempotent. Returned messages expose `status: sent | read | exec` and an optional `executed_at`. This describes the recipient's declaration, not completed work. See the [delivery contract](delivery.md).

@@ -16,10 +16,11 @@ Member `skills`, `mcps`, and `extensions` select resources. If omitted, their de
 | --- | --- |
 | `name` | Identifier matching its directory under `factories/`. |
 | `owner` | Member responsible for task coordination. |
+| `terminal_host` | Optional `herdr`, `terminal`, or `iterm`. `FACTORY_TERMINAL_HOST` overrides this; automatic selection uses Herdr when inside it, otherwise Terminal on macOS. |
 | `defaults` | Shared execution settings and optional resource selections. |
 | `providers` | Named custom provider definitions in Pi's native provider format. Built-in providers need no entry. |
 | `mcps` | Named native MCP server definitions. Declaring one does not enable it for every agent. |
-| `extensions` | Named Pi package sources or package objects. Only selected packages are installed/loaded. |
+| `extensions` | Named Pi package sources or package objects. Only selected packages are installed/loaded. The local Factory delivery extension is always loaded for Pi. |
 | `agents` | Members, paths, selections, overrides, and optional handoff requirements. |
 
 | Member field | Meaning |
@@ -39,6 +40,7 @@ These belong in `defaults` or a member's `config`:
 | Field | Meaning |
 | --- | --- |
 | `runner` | `pi`, or `command` for an explicit native runner command. |
+| `delivery` | Command runners only: `manual` (default), or `native` when their adapter implements the delivery contract. Pi always uses native delivery. |
 | `provider`, `model` | Selected provider and model IDs. |
 | `thinking` | Model-supported thinking level, such as `medium`, `high`, or `off`. |
 | `tools` | Pi built-in tool selection. MCP exposure is configured separately. |
@@ -64,7 +66,7 @@ The Go factory defines `gopls` once and selects it for the coder and reviewer. `
 
 The Go factory defines the pinned Ralph package once in `extensions.ralph`; only the coder selects `"extensions": ["ralph"]`. An absolute path to an existing package checkout can replace its source for offline use. Extension installation requires network access unless the package is already available locally. Factory dependency targets check/install selected packages in private generated profiles; each fresh agent profile may still need to obtain its own package copy.
 
-Skills are explicit file selections. `session.py` reads the full selected `SKILL.md` entrypoints into the agent's system instructions, preserving source paths for supporting references. A skill does not install tools or register an MCP server.
+Skills are explicit file selections. `session.ts` reads the full selected `SKILL.md` entrypoints into the agent's system instructions, preserving source paths for supporting references. A skill does not install tools or register an MCP server.
 
 Comms is shared infrastructure: `FACTORY_COMMS_URL` and `COMMS_AUTH_TOKEN` are the launch environment's connection settings for both helpers and agents. The launcher applies them to each generated comms entry. They are not per-agent model settings.
 

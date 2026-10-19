@@ -70,6 +70,8 @@ func MCPServer(store *Store) *mcp.Server {
 		messages, err := store.Inbox(ctx, input)
 		return messageList{messages}, err
 	})
+	registerTool(server, "execute_message", "Declare that the recipient has begun acting on a read message. Does not complete or accept an assignment. Safe to repeat.", false, store.ExecuteMessage)
+	registerTool(server, "record_runner_contact", "Record native runner liveness for its exact active instance. Not proof of assignment progress.", false, store.RecordRunnerContact)
 	registerTool(server, "acknowledge_message", "Record that the declared recipient read a message. Safe to repeat; does not mean accepted or completed.", false, store.Acknowledge)
 	registerTool(server, "record_event", "Append task evidence: progress, check, finding, failure, decision, note, stage_started, or stage_completed. Include stage and attempt for stage events; artifact paths/hashes and tool/MCP details may be included in data. Reuse request_key on retries. Decisions are records, not authenticated approvals.", false, store.RecordEvent)
 	registerTool(server, "list_events", "Read a task's event timeline. Use the last sequence as after for the next page.", true, func(ctx context.Context, input ListEventsInput) (eventList, error) {

@@ -10,21 +10,25 @@ if [ ! -f go.mod ]; then
     exit 1
 fi
 
-python3 - <<'PY'
-import pathlib
-import subprocess
-import sys
+node --input-type=module <<'JS'
+import fs from 'node:fs';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+const unformatted = [];
+function check(directory) {
+    for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+        if (['.git', '.factory', 'vendor'].includes(entry.name)) continue;
+        const file = path.join(directory, entry.name);
+        if (entry.isDirectory()) check(file);
+        else if (entry.isFile() && file.endsWith('.go') && execFileSync('gofmt', ['-l', file], {encoding: 'utf8'}).trim()) unformatted.push(file);
+    }
+}
+check('.');
+if (unformatted.length) {
+    console.error('Files needing gofmt:\n' + unformatted.join('\n'));
+    process.exit(1);
+}
+JS
 
-unformatted = []
-for path in pathlib.Path('.').rglob('*.go'):
-    if any(part in ('.git', '.factory', 'vendor') for part in path.parts):
-        continue
-    result = subprocess.run(['gofmt', '-l', str(path)], check=True, capture_output=True, text=True)
-    if result.stdout.strip():
-        unformatted.append(str(path))
-if unformatted:
-    print('Files needing gofmt:', *unformatted, sep='\n', file=sys.stderr)
-    sys.exit(1)
-PY
 go test ./...
 golangci-lint run "$@"

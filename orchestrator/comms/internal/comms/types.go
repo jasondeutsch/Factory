@@ -42,6 +42,8 @@ type UpdateTaskInput struct {
 }
 
 type Message struct {
+	Status         string  `json:"status"`
+	ExecutedAt     *string `json:"executed_at"`
 	AssignmentID   string  `json:"assignment_id,omitempty"`
 	ID             string  `json:"id"`
 	TaskID         string  `json:"task_id"`

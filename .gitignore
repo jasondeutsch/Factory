@@ -13,3 +13,5 @@ __pycache__/
 
 # Copy-update lock is local; keep .toolkit.json for its baseline.
 .toolkit.lock
+
+node_modules/
