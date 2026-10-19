@@ -136,3 +136,13 @@ Current task status remains independently owned by the orchestrator. Existing me
 Startup upgrades schema 1 to schema 2 transactionally, preserving tasks, messages, events and usage. Schema 2 adds coordination tables and optional `messages.assignment_id`. No legacy prose assignment is automatically promoted into canonical ownership. Use a newly created structured assignment when continuing such work. An older binary that only supports schema 1 cannot reopen the upgraded database.
 
 Rebuild/restart the comms deployment to expose the new tools, and reconnect existing clients. Preserve container-local data before recreating an unmounted container; use the existing opt-in volume when persistence is wanted. Source file edits do not update an already-running container or a session's loaded skill snapshot. No automatic delivery bridge or live contact collection is included in this feature.
+
+## Recover stopped work
+
+1. Call `get_recovery_plan` with the exact task and assignment. Inspect its saved inputs, summary, participant/contact, and related messages/checks. Contact expiry does not prove that its process stopped.
+2. Stop the old process using its native host controls. Register and bind the actual replacement instance; do not invent a placeholder or reuse the stopped instance's identity.
+3. The owner calls `recover_assignment` with the current assignment version, reason, stable request key, and `action: reassign`. Supply the replacement participant ID and `previous_session_stopped: true` only after that confirmation. For cancellation alone use `action: cancel`.
+4. Inspect the receipt. Cancellation and the linked replacement assignment occur in one transaction. A retry returns that same receipt. The previous summary/evidence remains intact; the replacement gets the original instructions/requirements and a reference to prior work, not a fabricated completed result.
+5. Notify the bound replacement through the delivery bridge. Resolve related attention items after reconciliation. Recovery does not start/stop panes, approve work, transfer participant identity, or silently close pending decisions.
+
+Terminal assignments cannot be recovered this way; create an explicit new assignment when revisiting submitted or already-cancelled work. The declared owner can cancel a retired participant's outstanding assignment. All identity and stopped-process assertions are declared by the caller, not authenticated host proofs.

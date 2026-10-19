@@ -173,3 +173,9 @@ Assignments retain explicit artifact/check/limitation requirements. Factory memb
 **Status:** Implemented
 
 Task-wide recorded timing separates assignment acceptance, closed blocked intervals and first notification. Reports count explicit decisions/interventions and submitted handoffs without inferring productivity or review quality. A Pi session importer deduplicates measured assistant usage, rejects ambiguous attribution, and reports incomplete coverage; unknown usage/cost remains unknown.
+
+## FACT-012 — Inspectable assignment recovery
+
+**Status:** Implemented
+
+An explicit recovery plan precedes owner-only cancellation or atomic reassignment to a real replacement participant. Version checks and stable request keys prevent duplicate work. Prior evidence and summary survive; reassignment requires operator confirmation that the old process stopped, never inferred from contact expiry.
