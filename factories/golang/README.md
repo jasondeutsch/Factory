@@ -27,3 +27,14 @@ The Go coder and reviewer bundles configure gopls as a native Pi MCP server. It 
 The architect and both reviewers include an optional official Linear MCP connection and shared context skill. Enable it when the task asks for ticket context. Its default endpoint exposes read tools only; retrieving a ticket does not authorize commenting, assigning it, or changing its status. Record the source and flag conflicts with the task's approved documents.
 
 Only the coder edits application source during this flow. Reviewers can write their task review documents and run agreed checks; neither instruction nor the supplied Pi tool list enforces filesystem isolation.
+
+## Dependencies
+
+From the application root:
+
+```bash
+make -C .factory/factories/golang install
+make -C .factory/factories/golang update
+```
+
+Installs the shared coordinator tools plus golangci-lint, gopls, and the coder's pinned Ralph extension. Run `update` only when intending to upgrade host tools. In the toolkit checkout, omit `.factory/`. Docker with Compose, credentials, and model configuration remain separate setup. See [dependency setup](../../docs/troubleshooting.md#dependency-commands).

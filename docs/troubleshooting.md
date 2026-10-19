@@ -22,13 +22,23 @@ Agent work runs on the host in ordinary sessions; no agent image or container sa
 
 ## Dependency commands
 
-The root [Makefile](../Makefile) provides three targets: `make install`, `make update`, and `make start`. The `start` recipe uses the standalone `docker-compose` executable. It assumes Homebrew is already installed and uses Pi's [official installer](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md#getting-started) for Pi. Update Herdr through Homebrew because this installation path is managed by Homebrew; see [Herdr installation](https://herdr.dev/docs/install/). `make update` uses `pi update self`, intended for installer-managed Pi. If your existing Pi comes from another package manager, update it using that manager instead.
+Install or update dependencies through the selected factory's Makefile. From the application root:
+
+```bash
+make -C .factory/factories/golang install
+# Later, when you intend to update its tools:
+make -C .factory/factories/golang update
+```
+
+Use `writing` instead of `golang` for the writing factory. In the toolkit source checkout, omit `.factory/` from these paths. Each factory calls the root shared target before its own commands. The root [Makefile](../Makefile) installs Herdr, Git, Go for the host bridge, Python, Pi for the supplied coordinator, and comms Go dependencies. Writing currently needs only that shared set. Go adds golangci-lint, gopls, and the coder's declared Ralph extension. These commands install on the host; they do not isolate versions between factories. Review project toolchain constraints before upgrading.
+
+Homebrew must already be installed. Pi uses its [official installer](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md#getting-started). Updates use Homebrew for its managed tools and `pi update self` for installer-managed Pi. If your Pi comes from another package manager, use that manager instead. Factory Makefiles remain explicit shell commands; they do not derive dependencies from `factory.json`. Update them when customizing the agents' tools or runners.
 
 Ensure `pi` and the Go binary directory (`go env GOBIN`, or `$(go env GOPATH)/bin` when empty) are on PATH. Docker/Compose, model credentials, and enabled MCP credentials remain explicit setup. These targets install tools; they do not configure providers, approve work, or start tasks.
 
-The install and update recipes run native Pi package reconciliation against the Go coder's authored profile with project trust disabled. [Pinned packages retain their configured ref](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/packages.md#choose-a-source). Other roles currently declare no extensions. Package caches are ignored by Git and included when preparing that role's private profile. Do not authenticate inside the authored profile or put credentials in its cache.
+The Go factory's install and update recipes run native Pi package reconciliation against the Go coder's authored profile with project trust disabled. [Pinned packages retain their configured ref](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/packages.md#choose-a-source). Other roles currently declare no extensions. Package caches are ignored by Git and included when preparing that role's private profile. Do not authenticate inside the authored profile or put credentials in its cache.
 
-`make -C .factory start` starts comms and launches the coordinator in that terminal; it requires the installed `.factory/` layout. This unselected bootstrap mode uses the coordinator bundle defaults. For factory-owned coordinator settings, start services and use `.factory/orchestrator/start.sh --factory <name>`, optionally with `--check`. A service launched by this command remains running when you exit the coordinator.
+`make -C .factory start` starts comms and launches the coordinator in that terminal; it requires the installed `.factory/` layout. This unselected bootstrap mode uses the coordinator bundle defaults. For factory-owned coordinator settings, use `.factory/orchestrator/start.sh --factory <name>`, optionally with `--check`. The coordinator entrypoint accepts either Compose command and starts local services automatically unless `FACTORY_COMMS_URL` selects an existing endpoint. Check-only mode requires services to be running already. Compose remains running when you exit the coordinator.
 
 ## First setup through an agent
 

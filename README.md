@@ -23,7 +23,7 @@ Copy this directory's contents into `.factory/` at the application root, preserv
 
 > Install `/path/to/factory` into this project's `.factory/` directory. Read its README and coordinator skill. Configure the Go factory for our provider and model; keep credentials in environment variables.
 
-With Homebrew already available, `make install` installs Herdr, Git, Go, Python, golangci-lint, gopls, Pi, and the Go coder's declared extensions. Install Docker with Compose separately. `make update` updates those tools and reconciles dependencies; Ralph remains at its declared Git revision. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites, corporate-network configuration, and updates.
+With Homebrew already available, install only the factory you need: `make -C factories/golang install` or `make -C factories/writing install`. Each includes the shared coordinator dependencies. The root `make install` installs only Herdr, Git, Go (for the delivery bridge), Python, Pi, and comms Go dependencies. The Go factory additionally installs golangci-lint, gopls, and the coder's pinned Ralph extension; writing adds no extra dependencies. Use `update` in the same directory to update that set. Install Docker with Compose separately. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites and corporate-network configuration.
 
 Set each needed member's `config.provider` and `config.model` in factory.json and provide credentials before launch. Starter profiles have no selected provider or model. The Go coder and reviewer also require gopls with MCP support, or an explicit decision to disable it.
 

@@ -105,3 +105,7 @@ Edit `factory.json` to change membership, paths, or per-factory execution settin
 These files configure an agent-driven process, not a workflow execution engine. The task helper currently scaffolds spec/plan HTML only for `golang`; other factories create task pointers and review directories without those documents. The native `--loop` shortcut remains specific to the supplied Pi Go coder. Adding a factory does not create new artifact-scaffolding or loop behavior automatically.
 
 Install the complete toolkit as the project's `.factory/` directory. Factory definitions and reusable resources are separate from generated `.factory/tasks/` artifacts, private runtime profiles, and application source. Resume retains the factory identifier in `task.json`; configuration is read anew for new launches, so edits do not change already-running sessions.
+
+## Factory dependencies
+
+Each factory owns a simple `Makefile` with `install` and `update` targets. Call the root shared target, then list only that factory's additional tools and extensions. Keep these commands aligned with the configured agents; changing `factory.json` does not rewrite installation commands. See [Go](golang/Makefile) and [writing](writing/Makefile) for examples. Installation affects the host, without per-factory version isolation.

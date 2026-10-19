@@ -11,3 +11,14 @@ Keep the working document in the task directory unless the user names another ou
 The writer stays interactive. It can ask an available architecture reviewer to examine technical arguments or the coordinator to arrange another review. Neither a second agent nor a review ceremony is mandatory. Sending a message does not grant authority to contact people or publish externally.
 
 When the user is satisfied, report the output path and any remaining fact checks. The writer can mark a task complete when acting as its recorded owner; otherwise it sends the coordinator a completion proposal. User feedback can reopen the task.
+
+## Dependencies
+
+From the application root:
+
+```bash
+make -C .factory/factories/writing install
+make -C .factory/factories/writing update
+```
+
+Installs the shared coordinator tools, including Pi. No additional writing-specific packages are required. Run `update` only when intending to upgrade host tools. In the toolkit checkout, omit `.factory/`. Docker with Compose, credentials, and model configuration remain separate setup. See [dependency setup](../../docs/troubleshooting.md#dependency-commands).
