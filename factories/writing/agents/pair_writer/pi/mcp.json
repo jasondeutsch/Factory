@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "comms": {
-      "url": "http://127.0.0.1:8090/mcp",
-      "description": "Factory task status, inbox messages, decisions, evidence, usage, and reports.",
-      "exposure": "codemode"
-    }
-  }
-}

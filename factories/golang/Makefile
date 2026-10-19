@@ -4,10 +4,10 @@ install:
 	$(MAKE) -C ../.. install
 	brew install golangci-lint
 	go install golang.org/x/tools/gopls@latest
-	PI_CODING_AGENT_DIR="$(CURDIR)/agents/coder_golang/pi" pi update --extensions --no-approve
+	python3 ../../orchestrator/scripts/install_extensions.py golang coder_golang
 
 update:
 	$(MAKE) -C ../.. update
 	brew upgrade golangci-lint
 	go install golang.org/x/tools/gopls@latest
-	PI_CODING_AGENT_DIR="$(CURDIR)/agents/coder_golang/pi" pi update --extensions --no-approve
+	python3 ../../orchestrator/scripts/install_extensions.py golang coder_golang

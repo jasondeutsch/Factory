@@ -18,29 +18,33 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
-from factorylib import factory_definition, agent_directory, factory_recipe, ROOT, actor, event, installed_project, print_json, read_task, Client, remote_task
+from factorylib import merge_configuration, factory_definition, agent_directory, factory_recipe, ROOT, actor, event, installed_project, print_json, read_task, Client, remote_task
 from adapters.pi import profile as pi_profile
 
 
 def configuration(role: str, factory: str | None = None) -> tuple[Path, dict]:
-    actor(role)
+    if factory is None:
+        raise ValueError("select a factory with --factory <name> or an explicit task directory")
+    definition = factory_definition(factory)
     directory = agent_directory(role, factory)
-    config = json.loads((directory / "config.json").read_text(encoding="utf-8"))
-    if not isinstance(config, dict):
-        raise ValueError("agent config.json must be an object")
-    overlay = directory / "config.local.json"
-    if overlay.exists():
-        config.update(pi_profile.object_file(overlay))
-    misplaced = [name for name in ("provider", "model", "thinking", "tools") if name in config]
-    if misplaced:
-        raise ValueError("configure " + ", ".join(misplaced) + " in native Pi settings.json/models.json, not config.json")
-    if factory is not None:
-        member = next(item for item in factory_definition(factory)["agents"] if item["name"] == role)
-        overrides = dict(member.get("config", {}))
-        if "skills" in overrides:
-            base = ROOT / "factories" / factory
-            overrides["skills"] = [str((base / value).resolve()) for value in overrides["skills"]]
-        config = pi_profile.merge(config, overrides)
+    member = next(item for item in definition["agents"] if item["name"] == role)
+    config = merge_configuration(definition.get("defaults", {}), member.get("config", {}))
+    base = ROOT / "factories" / factory
+    for field in ("skills", "mcps", "extensions"):
+        if field in member:
+            config[field] = member[field]
+    config["skills"] = [str((base / value).resolve()) for value in config.get("skills", [])]
+    native = config.setdefault("pi", {})
+    settings = native.setdefault("settings", {})
+    settings.setdefault("cacheWarming", "off")
+    settings["packages"] = [definition.get("extensions", {})[name] for name in config.get("extensions", [])]
+    provider = config.get("provider")
+    native["models"] = {"providers": {provider: definition["providers"][provider]}
+                        if provider in definition.get("providers", {}) else {}}
+    native["mcp"] = {"mcpServers": {name: definition.get("mcps", {})[name] for name in config.get("mcps", [])}}
+    if config.get("runner", "pi") == "command":
+        for field in ("pi", "provider", "model", "thinking", "tools"):
+            config.pop(field, None)
     return directory, config
 
 
@@ -227,8 +231,8 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
     elif runner == "command":
         if any(key in config for key in ("provider", "model", "thinking", "tools")) or config.get("pi"):
             raise ValueError("Pi provider/model/thinking/tools and pi overrides require runner=pi; configure command runners through command argv and env")
-        if any(config.get(key) for key in ("config_dir", "auth_file_env", "mcp_auth_file_env")):
-            raise ValueError("config_dir/auth_file_env/mcp_auth_file_env are Pi adapter options; remove them for runner=command")
+        if any(config.get(key) for key in ("auth_file_env", "mcp_auth_file_env")):
+            raise ValueError("auth_file_env/mcp_auth_file_env are Pi adapter options; remove them for runner=command")
         if config.get("args"):
             raise ValueError("use command argv for runner=command, not Pi args")
         raw = text_list(config, "command")
@@ -247,7 +251,7 @@ def prepare(role: str, task: Path | None, metadata: dict | None, runtime: Path, 
     else:
         raise ValueError(f"unsupported runner: {runner}; use pi or an explicit command adapter")
     return {
-        "role": role, "task": str(task) if task else None, "cwd": str(project), "command": command,
+        "role": role, "configuration_source": str(ROOT / "factories" / selected_factory / "factory.json"), "task": str(task) if task else None, "cwd": str(project), "command": command,
         "skills": [str(path) for path in skill_files],
         "instructions_file": str(instruction_file), "instructions": instructions,
         "environment_references": mapping, "child_env": child_env,

@@ -1,111 +1,91 @@
-# Factories
+# Configure a factory
 
-Each factory has two files:
+**Edit one file: `factories/<name>/factory.json`.** It declares the members, execution defaults, provider endpoints, MCP servers, extensions, and skill selections. Agent directories contain instructions, skills, scripts, and a thin `start.sh`; they contain no independent execution configuration.
 
-- `factory.json` defines its name, task owner, and member agents with explicit bundle paths.
-- `README.md` describes how those agents work together: artifacts, approvals, checks, and handoffs.
+See the complete [Go factory](golang/factory.json) and [writing factory](writing/factory.json). Both contain illustrative gateway settings that you must replace before launch.
 
-The supplied factories are [Go development](golang/README.md) and [interactive writing](writing/README.md). Reusable agents and skills live in [resources/](../resources/README.md); coordination infrastructure lives in [orchestrator/](../orchestrator/README.md).
+## Shared defaults and member overrides
 
-## Factory configuration
+A factory's `defaults` apply to all its members. A member's `config` overrides only what differs. Objects merge recursively; lists and scalar values replace. There are no global model settings, agent-local overrides, or native profile files to edit.
 
-The [Go factory configuration](golang/factory.json) contains:
+For example, put your provider/model in `defaults` once. Give the architect `"config": {"model": "reasoning-model", "thinking": "high"}` when it needs another model. Add that model to the selected custom provider's `models` list. A member with no `config` uses the defaults; it does not need an empty object.
 
-```json
-{
-  "name": "golang",
-  "owner": "coordinator",
-  "agents": [
-    {
-      "name": "coordinator",
-      "path": "../../orchestrator",
-      "config": {}
-    },
-    {
-      "name": "architect",
-      "path": "../../resources/agents/architect",
-      "config": {}
-    },
-    {
-      "name": "architecture_reviewer",
-      "path": "../../resources/agents/architecture_reviewer",
-      "config": {}
-    },
-    {
-      "name": "coder_golang",
-      "path": "agents/coder_golang",
-      "config": {}
-    },
-    {
-      "name": "code_reviewer_golang",
-      "path": "agents/code_reviewer_golang",
-      "config": {}
-    }
-  ]
-}
-```
+Member `skills`, `mcps`, and `extensions` select resources. If omitted, their defaults apply. An explicit list replaces the default list, so include `comms` in an MCP override. An empty list clears an optional selection; Pi sessions always require `comms`.
+
+| Factory field | Meaning |
+| --- | --- |
+| `name` | Identifier matching its directory under `factories/`. |
+| `owner` | Member responsible for task coordination. |
+| `defaults` | Shared execution settings and optional resource selections. |
+| `providers` | Named custom provider definitions in Pi's native provider format. Built-in providers need no entry. |
+| `mcps` | Named native MCP server definitions. Declaring one does not enable it for every agent. |
+| `extensions` | Named Pi package sources or package objects. Only selected packages are installed/loaded. |
+| `agents` | Members, paths, selections, overrides, and optional handoff requirements. |
+
+| Member field | Meaning |
+| --- | --- |
+| `name` | Unique role name used for launch and communication. |
+| `path` | Directory containing `agent.md`, or `SKILL.md` for the coordinator. Relative to this factory file, inside the toolkit. |
+| `config` | Optional execution overrides, using the fields below. |
+| `skills` | Paths to skill directories or entrypoint files, relative to this factory file, inside the toolkit. Include the shared task-comms skill. |
+| `mcps` | Names from the factory's `mcps` map. |
+| `extensions` | Names from the factory's `extensions` map. |
+| `handoff` | Assignment evidence defaults; see [dispatch](../orchestrator/references/dispatch.md). |
+
+## Execution settings
+
+These belong in `defaults` or a member's `config`:
 
 | Field | Meaning |
 | --- | --- |
-| `name` | Factory identifier, matching its directory under `factories/`. |
-| `owner` | Member agent name responsible for overall task status. |
-| `agents[].name` | Unique role name within this factory, used for launch and coordination. |
-| `agents[].config` | Per-factory execution overrides for this member; an empty object uses bundle defaults. |
-| `agents[].path` | Bundle directory relative to this `factory.json`. It must remain inside the toolkit and contain `config.json` plus `agent.md` (or `SKILL.md` for `coordinator`). |
+| `runner` | `pi`, or `command` for an explicit native runner command. |
+| `provider`, `model` | Selected provider and model IDs. |
+| `thinking` | Model-supported thinking level, such as `medium`, `high`, or `off`. |
+| `tools` | Pi built-in tool selection. MCP exposure is configured separately. |
+| `executable` | Pi executable name/path; defaults to `pi`. |
+| `check_timeout_seconds` | Native startup check timeout, default 30, maximum 300. |
+| `env` | Child environment names mapped to parent environment variable names. Values are references, not credentials. |
+| `auth_file_env`, `mcp_auth_file_env` | Environment variables containing absolute private native authentication-file paths. |
+| `args` | Additional permitted Pi flags. Cannot override model, tools, credentials, session ownership, or interactivity. |
+| `pi.settings` | Additional native settings, such as retry policy. Use the explicit fields above for model/tools and `extensions` for packages. |
+| `command` | Command runner argv, including `{instructions_file}`. See [other runners](../orchestrator/README.md#other-runners). |
 
-Membership comes from this file, not directory placement or a list in prose. A member can reference a factory-specific bundle or reusable toolkit resource. Listing an agent does not automatically launch it; the recipe and coordinator determine when it is needed. The [writing configuration](writing/factory.json) includes its pair writer plus optional coordinator and architecture-reviewer members.
+## Providers and credentials
 
-Task creation validates the definition and takes ownership from `owner`; changing this field does not rewrite existing comms task owners. Task attachment checks that the existing comms task has that owner. Bound launches resolve only members of the task's selected factory and include its configuration and recipe in the session instructions. Unknown members, duplicate names, missing bundles, and paths outside the toolkit fail explicitly.
+The examples use `team-gateway`, `your-model-id`, and `https://gateway.example.com/v1`. Replace the URL, `defaults.model`, and the provider's `models[].id`. The example protocol is OpenAI-compatible Chat Completions (`openai-completions`); choose the protocol your endpoint actually supports.
 
-An unassigned coordinator starts from `orchestrator/` before factory selection. Other unassigned agents resolve their name across declared factory memberships; shared references to the same bundle are valid. If factories map the same name to different bundles, supply a task so its factory selects the path.
+`provider` matches a key in `providers`, or a built-in Pi provider. The provider's `apiKey` is `${TEAM_MODEL_API_KEY}`; export that variable in the launching environment. Do not put its value in the file. For a built-in provider, select its ID/model, remove unused custom definitions, and use its native credential mechanism.
 
-## Configure a member
+Different members may select different providers and models. Only the selected custom provider is emitted into that agent's generated `models.json`. Other provider credentials are not required for that launch. Personal Pi settings are not imported.
 
-Set factory-specific execution settings in the member's `config`, rather than editing the reusable bundle. For example:
+## MCPs, skills, and extensions
 
-```json
-{
-  "name": "coder_golang",
-  "path": "agents/coder_golang",
-  "config": {
-    "provider": "openrouter",
-    "model": "deepseek/deepseek-v4-flash",
-    "thinking": "high"
-  }
-}
-```
+The Go factory defines `gopls` once and selects it for the coder and reviewer. `linear` is defined but unselected. To enable Linear for the architect, set its `mcps` to `["comms", "linear"]`, provide `LINEAR_API_KEY`, and start a new session. No native MCP file needs editing.
 
-Each member can use a different configuration. Credentials stay in environment variables or private authentication files, not factory definitions. Starter `config` objects are empty; select actual providers and models for your team.
+The Go factory defines the pinned Ralph package once in `extensions.ralph`; only the coder selects `"extensions": ["ralph"]`. An absolute path to an existing package checkout can replace its source for offline use. Extension installation requires network access unless the package is already available locally. Factory dependency targets check/install selected packages in private generated profiles; each fresh agent profile may still need to obtain its own package copy.
 
-| Config fields | Behavior |
-| --- | --- |
-| `provider`, `model`, `thinking`, `tools` | Pi adapter maps these to native `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, and `defaultTools`. |
-| `skills` | Replaces the bundle's skill list. Paths are relative to factory.json and must remain inside the toolkit. Retain the comms skill. |
-| `env` | Maps child variable names to existing parent variable names; values are references, not secrets. |
-| `pi.settings`, `pi.models`, `pi.mcp` | Native Pi object overrides for other settings, custom providers, extensions, and MCP connections. |
-| Other launcher fields | `runner`, `config_dir`, `args`, `executable`, `command`, auth-file references, and startup timeout use the [bundle configuration rules](../orchestrator/README.md). `config_dir` stays relative to the bundle. |
+Skills are explicit file selections. `session.py` reads the full selected `SKILL.md` entrypoints into the agent's system instructions, preserving source paths for supporting references. A skill does not install tools or register an MCP server.
 
-For example, `config.pi.mcp.mcpServers.linear.enabled: false` disables that member's Linear connection without changing its bundle. Native override objects merge recursively; lists replace. Factory overrides win over bundle defaults and local overlays. The four shorthand Pi settings above win over the equivalent fields in `pi.settings`. The launcher writes the effective native configuration only to the private runtime profile.
+Comms is shared infrastructure: `FACTORY_COMMS_URL` and `COMMS_AUTH_TOKEN` are the launch environment's connection settings for both helpers and agents. The launcher applies them to each generated comms entry. They are not per-agent model settings.
 
-A command runner uses `command` and `env` for its own native configuration. Pi-specific overrides with `runner: "command"` are rejected rather than silently ignored.
+## Start and inspect
 
-To select a factory before a task exists, use:
+From an application containing `.factory/`:
 
 ```bash
-.factory/orchestrator/start.sh --factory golang --check
 .factory/orchestrator/start.sh --factory golang
+.factory/resources/agents/architect/start.sh --factory golang --dry-run
+.factory/factories/golang/agents/coder_golang/start.sh <task-directory>
 ```
 
-This applies the coordinator member's config and loads the selected definition/recipe without creating a task. A task-bound session selects its recorded factory automatically; a conflicting `--factory` is rejected. Without either, no factory overrides apply: the coordinator uses its bootstrap bundle and other roles require an unambiguous declared bundle.
+`--factory` is required unless an explicit task selects its recorded factory. There is no global coordinator profile or automatic newest-task selection. A conflicting factory/task pair fails.
 
-## Customize
+`--dry-run` shows the resolved model, thinking, tools, MCP/extension names, skills, and command without writing files or starting an agent. Raw provider configuration and credential values are excluded. `--check` prepares private native files and checks credentials/MCPs without model inference; comms must already be available.
 
-Edit `factory.json` to change membership, paths, or per-factory execution settings. Edit the referenced bundle only when changing reusable defaults. Edit the recipe for working agreements. Keep lifecycle state and handoffs in comms. See [session configuration](../orchestrator/README.md) for bundle details.
+See [how the configuration reaches Pi](../orchestrator/README.md#how-configuration-reaches-pi) for the exact scripts and generated files.
 
-These files configure an agent-driven process, not a workflow execution engine. The task helper currently scaffolds spec/plan HTML only for `golang`; other factories create task pointers and review directories without those documents. The native `--loop` shortcut remains specific to the supplied Pi Go coder. Adding a factory does not create new artifact-scaffolding or loop behavior automatically.
+## Dependencies and customization
 
-Install the complete toolkit as the project's `.factory/` directory. Factory definitions and reusable resources are separate from generated `.factory/tasks/` artifacts, private runtime profiles, and application source. Resume retains the factory identifier in `task.json`; configuration is read anew for new launches, so edits do not change already-running sessions.
+Each factory owns a simple Makefile with `install` and `update`. These call shared prerequisites, then add factory-specific tools. No installer schema or package ecosystem is introduced. Install affects the host, not an isolated toolchain.
 
-## Factory dependencies
-
-Each factory owns a simple `Makefile` with `install` and `update` targets. Call the root shared target, then list only that factory's additional tools and extensions. Keep these commands aligned with the configured agents; changing `factory.json` does not rewrite installation commands. See [Go](golang/Makefile) and [writing](writing/Makefile) for examples. Installation affects the host, without per-factory version isolation.
+Edit the recipe in `README.md` for workflow agreements and `factory.json` for execution. Team-owned factories survive [toolkit updates](../docs/toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.

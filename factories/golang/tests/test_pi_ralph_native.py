@@ -109,34 +109,21 @@ class NativeRalphTest(unittest.TestCase):
                 "    else: result = {}\n"
                 "    print(json.dumps({'jsonrpc': '2.0', 'id': message['id'], 'result': result}), flush=True)\n"
             )
-            native = toolbox / "factories/golang/agents/coder_golang/pi"
-            settings = json.loads((native / "settings.json").read_text())
-            settings.update(defaultProvider="factory-fixture", defaultModel="fixture-model", defaultThinkingLevel="off",
-                            retry={"enabled": False}, packages=[{"source": str(Path(os.environ["FACTORY_TEST_RALPH_DIR"]).resolve()), "skills": []}])
-            (native / "settings.json").write_text(json.dumps(settings))
-            (native / "models.json").write_text(json.dumps({"providers": {"factory-fixture": {
-                "api": "openai-completions", "baseUrl": f"http://127.0.0.1:{server.server_port}/v1",
-                "apiKey": "${FACTORY_FIXTURE_KEY}", "models": [{"id": "fixture-model", "reasoning": False}],
-            }}}))
-            (native / "mcp.json").write_text(json.dumps({"mcpServers": {"comms": {"url": self.comms.url + "/mcp"}, "fixture": {
-                "command": sys.executable, "args": [str(mcp)], "exposure": "codemode",
-            }}}))
-            # Factory-owned execution choices must survive both fresh contexts.
             definition_path = toolbox / "factories/golang/factory.json"
             definition = json.loads(definition_path.read_text())
+            definition["providers"]["factory-fixture"] = {
+                "api": "openai-completions", "baseUrl": f"http://127.0.0.1:{server.server_port}/v1",
+                "apiKey": "${FACTORY_FIXTURE_KEY}", "models": [{"id": "fixture-model", "reasoning": False}],
+            }
+            definition["mcps"]["fixture"] = {"command": sys.executable, "args": [str(mcp)], "exposure": "codemode"}
+            definition["extensions"]["ralph"] = {"source": str(Path(os.environ["FACTORY_TEST_RALPH_DIR"]).resolve()), "skills": []}
+            pi = os.environ["FACTORY_TEST_PI"]
             for member in definition["agents"]:
                 if member["name"] == "coder_golang":
-                    member["config"] = {
-                        "provider": "factory-fixture", "model": "fixture-model", "thinking": "off",
-                        "pi": {"settings": {"retry": settings["retry"], "packages": settings["packages"]},
-                               "models": json.loads((native / "models.json").read_text())}
-                    }
+                    member["config"] = {"provider": "factory-fixture", "model": "fixture-model", "thinking": "off",
+                                        "executable": pi, "pi": {"settings": {"retry": {"enabled": False}}}}
+                    member["mcps"] = ["comms", "fixture"]
             definition_path.write_text(json.dumps(definition))
-            settings.update(defaultProvider="wrong-bundle-provider", defaultModel="wrong-bundle-model")
-            (native / "settings.json").write_text(json.dumps(settings))
-            (native / "models.json").write_text(json.dumps({"providers": {}}))
-            pi = os.environ["FACTORY_TEST_PI"]
-            (toolbox / "factories/golang/agents/coder_golang/config.local.json").write_text(json.dumps({"executable": pi}))
             env = {**os.environ, **self.comms.environment, "FACTORY_RUNTIME_DIR": str(project.parent / "runtime"),
                    "FACTORY_FIXTURE_KEY": "local-fixture-only", "PI_OFFLINE": "1",
                    "RALPH_NEXT_ITERATION_DELAY_SECONDS": "0"}
@@ -213,7 +200,7 @@ class NativeRalphTest(unittest.TestCase):
                     self.assertEqual(submitted["assignee_id"], worker["id"])
                     self.assertEqual(submitted["result"]["outcome"], "ready_for_review")
                     self.assertFalse((project / ".git").exists())
-                    self.assertEqual(json.loads((native / "settings.json").read_text()), settings)
+                    self.assertEqual(json.loads(definition_path.read_text()), definition)
                 finally:
                     process.terminate()
                     try:

@@ -4,7 +4,7 @@ This is an agent implementation reference. Users ask for implementation or give 
 
 ## Assignment and launch
 
-The Go coder's native `pi/settings.json` declares [edxeth/pi-ralph-loop](https://github.com/edxeth/pi-ralph-loop), pinned to commit `108823f8d1e2089fec1f7202ca3a8905d12df574` (package version 1.3.3). Pi manages loading and installing this declared package in the private runtime profile. Git/network access is needed to obtain the plugin; application work does not require a Git repository. An already available local package can replace the source in a native settings overlay for offline use. Do not replace certificate validation to obtain it.
+The Go factory's `factory.json` defines `extensions.ralph` and selects it for the coder: [edxeth/pi-ralph-loop](https://github.com/edxeth/pi-ralph-loop), pinned to commit `108823f8d1e2089fec1f7202ca3a8905d12df574` (package version 1.3.3). Pi manages loading and installing this declared package in the private runtime profile. Git/network access is needed to obtain the plugin; application work does not require a Git repository. An already available local package can replace the source in the factory extension definition for offline use. Do not replace certificate validation to obtain it.
 
 Before starting, the coordinator records the actual approval of current `spec.html` and `plan.html`, discovers the actual launcher-registered coder instance and creates its canonical comms assignment, and confirms no other agent owns source edits. Plan items have stable IDs and verification. Create or resume the task's `progress.md` with the assigned item IDs and any relevant prior work; do not create another spec or plan.
 
@@ -52,17 +52,7 @@ The launch guard reads all comms decision pages for the task ID in the local poi
 - Interactive installation of a newly copied toolbox requires provider/model selection and any required MCP credentials or installed tools. A local package override must point to the real plugin checkout; it is not copied into the toolbox automatically.
 - Reviewers and the pair writer do not start automatic Ralph loops. Review cycles remain explicitly assigned and bounded by the factory recipe.
 
-For an already available checkout, a coder `pi/settings.local.json` overlay can replace the package source:
-
-```json
-{
-  "packages": [
-    {"source": "/absolute/path/to/pi-ralph-loop", "skills": [], "prompts": [], "themes": []}
-  ]
-}
-```
-
-Use the pinned revision for equivalent behavior. This array replaces the entire package list, so retain any other packages the role needs. An absolute checkout path remains usable when the authored profile is copied to a private runtime directory; a relative path to something outside that profile may resolve differently there. Do not install the extension globally and assume isolated role profiles will inherit it.
+For an existing checkout, set `extensions.ralph.source` in `factory.json` to its absolute path. Keep the coder's `extensions` selection as `["ralph"]`. Absolute paths avoid dependence on the private runtime directory. Installing the extension globally does not make an isolated agent profile inherit it.
 
 ## Maintainer verification
 

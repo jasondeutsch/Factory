@@ -42,18 +42,17 @@ class NativePiTest(unittest.TestCase):
                 "    else: result = {}\n"
                 "    print(json.dumps({'jsonrpc': '2.0', 'id': message['id'], 'result': result}), flush=True)\n"
             )
-            native = toolbox / "resources" / "agents" / "architect" / "pi"
-            settings = json.loads((native / "settings.json").read_text())
-            settings.update(defaultProvider="factory-fixture", defaultModel="fixture-model")
-            (native / "settings.json").write_text(json.dumps(settings))
-            (native / "models.json").write_text(json.dumps({"providers": {"factory-fixture": {
+            path = toolbox / "factories/golang/factory.json"
+            definition = json.loads(path.read_text())
+            definition["defaults"].update(provider="factory-fixture", model="fixture-model", executable=os.environ["FACTORY_TEST_PI"])
+            definition["providers"] = {"factory-fixture": {
                 "api": "openai-completions", "baseUrl": "http://127.0.0.1:1/v1",
                 "apiKey": "${FACTORY_FIXTURE_KEY}", "models": [{"id": "fixture-model"}],
-            }}}))
-            (native / "mcp.json").write_text(json.dumps({"mcpServers": {"comms": {"url": self.comms.url + "/mcp"}, "fixture": {
-                "command": sys.executable, "args": [str(server)], "exposure": "codemode",
-            }}}))
-            (toolbox / "resources" / "agents" / "architect" / "config.local.json").write_text(json.dumps({"executable": os.environ["FACTORY_TEST_PI"]}))
+            }}
+            definition["mcps"]["fixture"] = {"command": sys.executable, "args": [str(server)], "exposure": "codemode"}
+            next(member for member in definition["agents"] if member["name"] == "architect")["mcps"] = ["comms", "fixture"]
+            path.write_text(json.dumps(definition))
+            original = path.read_bytes()
             env = {**os.environ, **self.comms.environment, "FACTORY_RUNTIME_DIR": str(project / "private-runtime"), "FACTORY_FIXTURE_KEY": "local-fixture-only"}
             created = subprocess.run([sys.executable, str(toolbox / "orchestrator/scripts/task.py"), "new", "--factory", "golang", "--name", "Native startup", "--brief", "Check native configuration only."],
                                      cwd=project, env=env, text=True, capture_output=True, timeout=10)
@@ -65,7 +64,7 @@ class NativePiTest(unittest.TestCase):
             self.assertTrue(result["ready"])
             self.assertEqual(next(server for server in result["mcps"] if server["name"] == "fixture")["tools"], ["inspect_fixture"])
             self.assertEqual(result["mcps"][0]["exposure"], "codemode")
-            self.assertEqual(json.loads((native / "settings.json").read_text()), settings)
+            self.assertEqual(path.read_bytes(), original)
             self.assertFalse(list((project / "private-runtime").rglob("session.jsonl")))
 
 

@@ -15,7 +15,7 @@ docs/               # Setup, troubleshooting, and tool tradeoffs
 
 **Each factory's `factory.json` declares its member names, bundle paths, and task owner.** Its `README.md` describes how those members work together. Directory placement does not define membership. See the [configuration reference](factories/README.md), [Go configuration](factories/golang/factory.json), and [writing configuration](factories/writing/factory.json).
 
-Each member's factory.json `config` sets factory-specific execution choices. Its referenced bundle supplies reusable instructions, skill/runner defaults, and native profile defaults. Reusable bundles live in `resources/agents/`; factory-specific bundles live with their factory. Paths in `factory.json` are relative to that file. [Session configuration](orchestrator/README.md) explains overrides and startup behavior.
+`factory.json` is the single authored configuration source: set shared execution choices in `defaults`, define providers/MCPs/extensions once, and override only what differs for a member. Agent directories hold instructions, skills, and scripts. [How configuration reaches Pi](orchestrator/README.md#how-configuration-reaches-pi) explains how `session.py` generates each agent's private native files.
 
 ## Install in a project
 
@@ -25,7 +25,7 @@ Copy this directory's contents into `.factory/` at the application root, preserv
 
 With Homebrew already available, install only the factory you need: `make -C factories/golang install` or `make -C factories/writing install`. Each includes the shared coordinator dependencies. The root `make install` installs only Herdr, Git, Go (for the delivery bridge), Python, Pi, and comms Go dependencies. The Go factory additionally installs golangci-lint, gopls, and the coder's pinned Ralph extension; writing adds no extra dependencies. Use `update` in the same directory to update that set. Install Docker with Compose separately. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites and corporate-network configuration.
 
-Set each needed member's `config.provider` and `config.model` in factory.json and provide credentials before launch. Starter profiles have no selected provider or model. The Go coder and reviewer also require gopls with MCP support, or an explicit decision to disable it.
+The examples select `team-gateway` and `your-model-id` in `defaults`, with a placeholder URL and `${TEAM_MODEL_API_KEY}` in `providers`. Replace these shared values once, then add member overrides only when needed. See the [factory reference](factories/README.md). The Go coder and reviewer also need gopls with MCP support.
 
 ## Start the coordinator
 
@@ -35,9 +35,9 @@ From the application root, select the factory whose coordinator settings should 
 .factory/orchestrator/start.sh --factory golang
 ```
 
-The entrypoint starts local Compose services and waits for MCP connectivity. Set `FACTORY_COMMS_URL` to use an existing service without managing Compose. Run inside Herdr for visible panes and a supervised delivery bridge; outside Herdr it explicitly reports that inbox polling is required. The bridge stops when the coordinator exits; Compose services remain running. No task or worker starts automatically. `make -C .factory start` is the shortcut for an unselected coordinator using its bootstrap bundle settings; it does not select a factory or apply member overrides.
+The entrypoint starts local Compose services and waits for MCP connectivity. Set `FACTORY_COMMS_URL` to use an existing service without managing Compose. Run inside Herdr for visible panes and a supervised delivery bridge; outside Herdr it explicitly reports that inbox polling is required. The bridge stops when the coordinator exits; Compose services remain running. No task or worker starts automatically. `make -C .factory start FACTORY=golang` is the equivalent shortcut. Factory selection is explicit; there is no global coordinator configuration.
 
-You can also use an existing agent as coordinator: read `.factory/orchestrator/SKILL.md`, connect its native MCP client to `http://127.0.0.1:8090/mcp`, and reload it. Reading a skill alone does not register tools. The supplied worker profiles already declare this connection.
+You can also use an existing agent as coordinator: read `.factory/orchestrator/SKILL.md`, connect its native MCP client to `http://127.0.0.1:8090/mcp`, and reload it. Reading a skill alone does not register tools. The supplied factories select this connection for their members.
 
 Use `.factory/orchestrator/start.sh --factory golang --check` to check the selected member's readiness without model inference.
 
@@ -51,7 +51,7 @@ For writing:
 
 > Use the writing factory to explain our proposed platform to engineering and finance. Discuss the argument with me before drafting.
 
-The [writing factory](factories/writing/README.md) uses the interactive pair writer without mandatory spec/plan documents. Both factories can start from conversation; you do not need to prepare a request file or operate task lifecycle scripts. [Linear context](orchestrator/README.md#linear-ticket-context) is optional when requested and configured.
+The [writing factory](factories/writing/README.md) uses the interactive pair writer without mandatory spec/plan documents. Both factories can start from conversation; you do not need to prepare a request file or operate task lifecycle scripts. [Linear context](orchestrator/README.md#credentials-and-mcps) is optional when requested and configured.
 
 ## Observe and give feedback
 

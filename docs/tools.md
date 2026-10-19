@@ -34,7 +34,7 @@ Herdr is optional: agents can use manually opened sessions. The model provider i
 | Python 3.10+ and a POSIX shell | Run Factory's bookkeeping/launch helpers and the optional Go check script. | Standard-library Python avoids a Python package-install step; the scripts remain inspectable. | These are host dependencies. The supplied Go script expects a POSIX shell and a single module root. |
 | Git | Can help inspect changes and obtain the pinned Ralph package. | Familiar source inspection and a pinned plugin revision. | Application tasks do not require a Git repository, but fetching the declared Git package needs Git and network access. Committing remains separately authorized. |
 
-Pi supplies normal file and shell tools through each role's `pi/settings.json`. Their presence allows an agent to inspect or change files and run commands; a reviewer prompt does not remove the host account's filesystem permissions. See [session configuration](../orchestrator/README.md) for the actual per-role settings.
+Pi receives normal file and shell tools through generated `settings.json`, resolved from factory defaults and member overrides. Their presence allows an agent to inspect or change files and run commands; a reviewer prompt does not remove the host account's filesystem permissions. See [session configuration](../orchestrator/README.md) for the actual per-role settings.
 
 The configured gopls connection runs in detached stdio mode and sees saved files, not an editor's unsaved buffers. gopls may invoke Go to load packages, download modules, and write caches. Its MCP support is experimental, so inspect the installed server's advertised tools rather than assuming a fixed catalog. [gopls documentation](https://go.dev/gopls/features/mcp)
 
@@ -51,7 +51,7 @@ These commands are for agents and maintainers. Users normally request their outc
 | [scripts/task.py](../orchestrator/scripts/task.py) | Attaches local artifacts to comms tasks and offers deterministic wrappers for the same MCP tools, including document hashes. | Does not start agents, choose the next stage, poll for replies, or verify work. |
 | `factories/<factory>/agents/<role>/start.sh`, `orchestrator/start.sh` | Start a role using its own bundle through the shared launcher. | Thin entrypoints; task is optional for interactive startup, mandatory for Ralph. No configuration is duplicated in shell. |
 | [orchestrator/session.py](../orchestrator/session.py) | Assembles a role's instructions and skills, prepares its native profile, checks startup, and replaces itself with the selected runner. | Starts one interactive session; it is not a supervisor. `--loop N` delegates iterations to the native Ralph plugin. |
-| [orchestrator/adapters/pi/profile.py](../orchestrator/adapters/pi/profile.py) | Loads and overlays native JSON configuration, prepares private files, and asks Pi to check credentials, MCPs, and required commands. | An internal library, not another agent launcher or an MCP client implementation. |
+| [orchestrator/adapters/pi/profile.py](../orchestrator/adapters/pi/profile.py) | Generates native Pi JSON from the resolved factory configuration and asks Pi to check credentials, MCPs, and required commands. | An internal library, not another agent launcher or an MCP client implementation. |
 | [scripts/factorylib.py](../orchestrator/scripts/factorylib.py) | Checks local artifact identity, publishes local JSON pointers atomically, and records events through comms. | No local mailbox or event store; service access is required for task state. |
 | [check-go.sh](../factories/golang/agents/coder_golang/scripts/check-go.sh) | Checks formatting without changing files, runs `go test ./...`, then `golangci-lint run` with supplied arguments. | Fails at the first failing step. Requires `go.mod` in the current directory and installed tools. Does not install dependencies, supply lint configuration, or explicitly run a separate `go vet ./...` command. Prefer project commands when they fit better. |
 
@@ -63,7 +63,7 @@ These commands are for agents and maintainers. Users normally request their outc
 
 A **role** defines responsibilities and authority. A **skill** gives reusable working guidance. A **tool** performs an operation. A **recipe** describes the collaboration. Configuring a skill does not install a tool, and a recipe is not an executable graph.
 
-Every supplied role explicitly imports the shared [task-comms skill](../orchestrator/comms/skills/task-comms/SKILL.md) from the comms directory and receives its role instructions, its recipe, and the full entrypoint text of each skill listed in `config.json`. Supporting references are read when relevant. Explicit inclusion makes behavior inspectable; loading many entrypoints also adds prompt tokens, so keep each role's selection focused.
+Every supplied role explicitly imports the shared [task-comms skill](../orchestrator/comms/skills/task-comms/SKILL.md) from the comms directory and receives its role instructions, its recipe, and the full entrypoint text of each skill selected in `factory.json`. Supporting references are read when relevant. Explicit inclusion makes behavior inspectable; loading many entrypoints also adds prompt tokens, so keep each role's selection focused.
 
 | Guidance | Included in |
 | --- | --- |

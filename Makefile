@@ -11,4 +11,4 @@ update:
 	cd orchestrator/comms && go mod download
 
 start:
-	./orchestrator/start.sh
+	./orchestrator/start.sh --factory $(FACTORY)

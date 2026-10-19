@@ -38,12 +38,27 @@ class ToolboxTest(unittest.TestCase):
         self.env = {**os.environ, **self.comms.environment, "FACTORY_RUNTIME_DIR": str(self.runtime)}
         self.env.pop("PYTHONDONTWRITEBYTECODE", None)
         self.env.pop("HERDR_ENV", None)
-        for directory in [self.toolbox / "orchestrator", *(self.toolbox / "resources" / "agents").iterdir(), *(self.toolbox / "factories").glob("*/agents/*")]:
-            path = directory / "pi" / "settings.json"
-            settings = json.loads(path.read_text())
-            settings.update(defaultProvider="fixture", defaultModel="test-model")
-            path.write_text(json.dumps(settings))
+        for factory in ("golang", "writing"):
+            path = self.toolbox / "factories" / factory / "factory.json"
+            definition = json.loads(path.read_text())
+            definition["defaults"].update(provider="fixture", model="test-model")
+            path.write_text(json.dumps(definition))
         self.task = self.create_task()
+
+    def configure(self, role, config=None, factory="golang", **fields):
+        path = self.toolbox / "factories" / factory / "factory.json"
+        definition = json.loads(path.read_text())
+        member = next(item for item in definition["agents"] if item["name"] == role)
+        if config is not None:
+            member.setdefault("config", {}).update(config)
+        member.update(fields)
+        path.write_text(json.dumps(definition))
+
+    def define(self, section, key, value, factory="golang"):
+        path = self.toolbox / "factories" / factory / "factory.json"
+        definition = json.loads(path.read_text())
+        definition.setdefault(section, {})[key] = value
+        path.write_text(json.dumps(definition))
 
     def command(self, script, *args, expected=0, env=None, cwd=None, input=None):
         result = subprocess.run(
@@ -373,26 +388,23 @@ class ToolboxTest(unittest.TestCase):
         self.assertEqual(before, sorted(str(path.relative_to(self.project)) for path in self.project.rglob("*")))
 
     def test_independent_role_models_and_missing_environment_reference(self):
-        native_overlay = self.toolbox / "resources" / "agents" / "architect" / "pi" / "settings.local.json"
-        native_overlay.write_text(json.dumps({"defaultModel": "architect-model", "defaultThinkingLevel": "high"}))
-        overlay = self.toolbox / "resources" / "agents" / "architect" / "config.local.json"
+        self.configure("architect", {"model": "architect-model", "thinking": "high"})
         architect = json.loads(self.command("orchestrator/session.py", "architect", self.task, "--dry-run").stdout)
         coder = json.loads(self.command("orchestrator/session.py", "coder_golang", self.task, "--dry-run").stdout)
         self.assertEqual(architect["runner_configuration"]["model"], "architect-model")
         self.assertEqual(coder["runner_configuration"]["model"], "test-model")
         self.assertEqual(architect["runner_configuration"]["thinking"], "high")
         self.assertNotIn("--model", architect["command"])
-        overlay.write_text(json.dumps({"env": {"NODE_EXTRA_CA_CERTS": "NONEXISTENT_FACTORY_TEST_ENV"}}))
+        self.configure("architect", {"env": {"NODE_EXTRA_CA_CERTS": "NONEXISTENT_FACTORY_TEST_ENV"}})
         result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", expected=1)
         self.assertIn("NONEXISTENT_FACTORY_TEST_ENV", result.stderr)
         self.assertFalse(self.runtime.exists())
 
     def test_native_pi_launch_uses_project_root_and_private_home_session(self):
         capture, env = self.fake_pi()
-        overlay = self.toolbox / "resources" / "agents" / "architect" / "config.local.json"
-        overlay.write_text(json.dumps({"env": {"NODE_EXTRA_CA_CERTS": "FACTORY_ARCHITECT_CERTS"}}))
+        self.configure("architect", {"env": {"NODE_EXTRA_CA_CERTS": "FACTORY_ARCHITECT_CERTS"}})
         env["FACTORY_ARCHITECT_CERTS"] = "/some/private/certificates.pem"
-        source = self.toolbox / "resources" / "agents" / "architect" / "pi" / "settings.json"
+        source = self.toolbox / "factories/golang/factory.json"
         original = source.read_bytes()
         self.command("orchestrator/session.py", "architect", self.task, env=env)
         record = json.loads(capture.read_text())
@@ -494,8 +506,7 @@ class ToolboxTest(unittest.TestCase):
             plan = json.loads(self.command("orchestrator/session.py", role, self.task, "--dry-run", env=env).stdout)
             self.assertNotIn("LINEAR_API_KEY", plan["runner_configuration"]["required_environment"])
             self.assertIn("linear-context", plan["instructions"])
-        native = self.toolbox / "resources/agents/architect/pi"
-        (native / "mcp.local.json").write_text(json.dumps({"mcpServers": {"linear": {"enabled": True}}}))
+        self.configure("architect", mcps=["comms", "linear"])
         missing_env = {key: value for key, value in env.items() if key != "LINEAR_API_KEY"}
         result = self.command("orchestrator/session.py", "architect", self.task, expected=1, env=missing_env)
         self.assertIn("LINEAR_API_KEY", result.stderr)
@@ -510,8 +521,7 @@ class ToolboxTest(unittest.TestCase):
 
     def test_mcp_overlay_and_relative_workspace_are_materialized(self):
         capture, env = self.fake_pi()
-        native = self.toolbox / "factories" / "golang" / "agents" / "coder_golang" / "pi"
-        (native / "mcp.local.json").write_text(json.dumps({"mcpServers": {"gopls": {"timeout": 15, "cwd": "."}}}))
+        self.define("mcps", "gopls", {"command": "gopls", "args": ["mcp"], "timeout": 15, "cwd": "."})
         self.command("orchestrator/session.py", "coder_golang", self.task, env=env)
         profile = Path(json.loads(capture.read_text())["private_config"])
         config = json.loads((profile / "mcp.json").read_text())["mcpServers"]["gopls"]
@@ -542,8 +552,7 @@ class ToolboxTest(unittest.TestCase):
     def test_startup_timeout_stops_before_chat(self):
         capture, env = self.fake_pi()
         env["HANG_CHECK"] = "credentials"
-        overlay = self.toolbox / "resources" / "agents" / "architect" / "config.local.json"
-        overlay.write_text(json.dumps({"check_timeout_seconds": 0.1}))
+        self.configure("architect", {"check_timeout_seconds": 0.1})
         result = self.command("orchestrator/session.py", "architect", self.task, expected=1, env=env)
         self.assertFalse(capture.exists())
         self.assertIn("timed out", result.stderr)
@@ -559,8 +568,7 @@ class ToolboxTest(unittest.TestCase):
         auth = self.project.parent / "private-auth.json"
         auth.write_text('{"fixture":{"type":"api_key","key":"private-fixture-key"}}')
         env["FACTORY_AUTH_FILE"] = str(auth)
-        overlay = self.toolbox / "resources" / "agents" / "architect" / "config.local.json"
-        overlay.write_text(json.dumps({"auth_file_env": "FACTORY_AUTH_FILE"}))
+        self.configure("architect", {"auth_file_env": "FACTORY_AUTH_FILE"})
         self.command("orchestrator/session.py", "architect", self.task, env=env)
         profile = Path(json.loads(capture.read_text())["private_config"])
         self.assertTrue((profile / "auth.json").is_symlink())
@@ -569,48 +577,33 @@ class ToolboxTest(unittest.TestCase):
 
     def test_readonly_native_profile_produces_private_writable_runtime(self):
         capture, env = self.fake_pi()
-        native = self.toolbox / "resources" / "agents" / "architect" / "pi"
-        paths = list(native.iterdir())
-        for path in paths:
-            path.chmod(0o444)
-        native.chmod(0o555)
-        try:
-            self.command("orchestrator/session.py", "architect", self.task, env=env)
-            target = Path(json.loads(capture.read_text())["private_config"])
-            self.assertEqual(target.stat().st_mode & 0o777, 0o700)
-            settings = target / "settings.json"
-            self.assertEqual(settings.stat().st_mode & 0o777, 0o600)
-            settings.write_text(settings.read_text())
-            self.assertEqual(native.stat().st_mode & 0o777, 0o555)
-        finally:
-            native.chmod(0o755)
-            for path in paths:
-                path.chmod(0o644)
+        source = self.toolbox / "factories/golang/factory.json"
+        source.chmod(0o444)
+        self.command("orchestrator/session.py", "architect", self.task, env=env)
+        target = Path(json.loads(capture.read_text())["private_config"])
+        self.assertEqual(target.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((target / "settings.json").stat().st_mode & 0o777, 0o600)
+        self.assertEqual(source.stat().st_mode & 0o777, 0o444)
 
     def test_disabled_mcp_does_not_require_its_environment(self):
         capture, env = self.fake_pi()
-        native = self.toolbox / "resources" / "agents" / "architect" / "pi" / "mcp.json"
-        native.write_text(json.dumps({"mcpServers": {"comms": {"url": self.comms.url + "/mcp"}, "optional": {
-            "url": "https://example.invalid/mcp", "enabled": False,
-            "headers": {"Authorization": "Bearer ${UNAVAILABLE_OPTIONAL_MCP_KEY}"},
-        }}}))
+        self.define("mcps", "optional", {"url": "https://example.invalid/mcp", "headers": {"Authorization": "Bearer ${UNAVAILABLE_OPTIONAL_MCP_KEY}"}})
         self.command("orchestrator/session.py", "architect", self.task, env=env)
-        self.assertTrue(capture.exists())
+        profile = Path(json.loads(capture.read_text())["private_config"])
+        self.assertNotIn("optional", json.loads((profile / "mcp.json").read_text())["mcpServers"])
 
     def test_mcp_auth_is_shared_only_when_explicitly_requested(self):
         capture, env = self.fake_pi()
         auth = self.project.parent / "private-mcp-auth.json"
         auth.write_text('{}')
         env["FACTORY_MCP_AUTH_FILE"] = str(auth)
-        overlay = self.toolbox / "resources" / "agents" / "architect" / "config.local.json"
-        overlay.write_text(json.dumps({"mcp_auth_file_env": "FACTORY_MCP_AUTH_FILE"}))
+        self.configure("architect", {"mcp_auth_file_env": "FACTORY_MCP_AUTH_FILE"})
         self.command("orchestrator/session.py", "architect", self.task, env=env)
         profile = Path(json.loads(capture.read_text())["private_config"])
         self.assertEqual((profile / "mcp-auth.json").resolve(), auth)
 
     def test_native_provider_environment_values_do_not_appear_in_dry_run(self):
-        path = self.toolbox / "resources" / "agents" / "architect" / "pi" / "models.json"
-        path.write_text(json.dumps({"providers": {"fixture": {"baseUrl": "http://example.invalid/v1", "apiKey": "${FIXTURE_KEY}", "models": [{"id": "test-model"}]}}}))
+        self.define("providers", "fixture", {"baseUrl": "http://example.invalid/v1", "apiKey": "${FIXTURE_KEY}", "models": [{"id": "test-model"}]})
         env = {**self.env, "FIXTURE_KEY": "private-env-value"}
         result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", env=env)
         self.assertNotIn(env["FIXTURE_KEY"], result.stdout)
@@ -624,11 +617,7 @@ class ToolboxTest(unittest.TestCase):
             "import json, os, pathlib, sys\n"
             "pathlib.Path(sys.argv[2]).write_text(json.dumps({'cwd': os.getcwd(), 'instructions': pathlib.Path(sys.argv[1]).read_text()}))\n"
         )
-        overlay = self.toolbox / "factories" / "writing" / "agents" / "pair_writer" / "config.local.json"
-        overlay.write_text(json.dumps({
-            "runner": "command", "config_dir": None,
-            "command": [sys.executable, str(fake), "{instructions_file}", str(capture)],
-        }))
+        self.configure("pair_writer", {"runner": "command", "command": [sys.executable, str(fake), "{instructions_file}", str(capture)]}, factory="writing")
         writing = self.create_task(factory="writing", name="Custom runner")
         self.command("orchestrator/session.py", "pair_writer", writing)
         result = json.loads(capture.read_text())
@@ -668,10 +657,10 @@ class ToolboxTest(unittest.TestCase):
         # Approval must remain discoverable beyond the maximum 500-event page.
         for index in range(501):
             client.call("record_event", task_id=task_id, actor="coordinator", kind="note", message=str(index))
-        self.command("orchestrator/session.py", "coder_golang", self.task, "--loop", "2", "--dry-run")
+        self.command("orchestrator/session.py", "coder_golang", self.task, "--factory", "golang", "--loop", "2", "--dry-run")
         client.call("record_event", task_id=task_id, actor="human", kind="decision", message="Stop and revise",
                     data={"outcome": "request_changes"})
-        self.command("orchestrator/session.py", "coder_golang", self.task, "--loop", "2", "--dry-run", expected=1)
+        self.command("orchestrator/session.py", "coder_golang", self.task, "--factory", "golang", "--loop", "2", "--dry-run", expected=1)
 
     def test_inbox_pagination_and_service_outage(self):
         sys.path.insert(0, str(SOURCE / "orchestrator" / "comms"))
@@ -710,8 +699,7 @@ class ToolboxTest(unittest.TestCase):
             {"name": "architect", "path": "agents/architect"}
         ]}))
         result = self.command("orchestrator/session.py", "architect", "--dry-run", expected=1)
-        self.assertIn("expected one declared agent bundle for architect", result.stderr)
-        self.assertIn("found 2", result.stderr)
+        self.assertIn("select a factory", result.stderr)
         self.assertFalse(self.runtime.exists())
         self.command("orchestrator/session.py", "architect", self.task, "--dry-run")
 
@@ -727,7 +715,7 @@ class ToolboxTest(unittest.TestCase):
         path.write_text(json.dumps(definition))
         planned = self.command("orchestrator/session.py", "coder_golang", self.task, "--dry-run")
         plan = json.loads(planned.stdout)
-        self.assertEqual(plan["runner_configuration"]["source_dir"], str(relocated / "pi"))
+        self.assertIn(str(relocated / "agent.md"), plan["instructions"])
         self.assertIn('"path": "agents/implementation"', plan["instructions"])
         definition["agents"] = [member for member in definition["agents"] if member["name"] != "architect"]
         path.write_text(json.dumps(definition))
@@ -766,59 +754,92 @@ class ToolboxTest(unittest.TestCase):
         task = self.create_task(factory="writing", name="Configured owner")
         self.assertEqual(json.loads((task / "task.json").read_text())["owner"], "coordinator")
 
-    def test_factory_overrides_generate_private_native_profiles(self):
-        path = self.toolbox / "factories/golang/factory.json"
-        definition = json.loads(path.read_text())
-        for member in definition["agents"]:
-            if member["name"] == "coordinator":
-                member["config"] = {"provider": "factory-router", "model": "coordinator-model", "thinking": "high"}
-            if member["name"] == "architect":
-                member["config"] = {
-                    "provider": "another-router", "model": "architect-model", "thinking": "low", "tools": ["read"],
-                    "env": {"TEAM_GATEWAY_KEY": "FACTORY_FIXTURE_KEY"},
-                    "skills": ["../../orchestrator/comms/skills/task-comms"],
-                    "pi": {"settings": {"retry": {"enabled": False}},
-                           "models": {"providers": {"another-router": {"apiKey": "${TEAM_GATEWAY_KEY}"}}},
-                           "mcp": {"mcpServers": {"linear": {"enabled": False}, "extra": {"url": "http://localhost:9999/mcp", "enabled": False}}}}
-                }
-        path.write_text(json.dumps(definition))
-        profile = self.toolbox / "resources/agents/architect/pi"
-        (profile / "settings.local.json").write_text(json.dumps({"defaultModel": "bundle-local-model"}))
-        before = {p.name: p.read_bytes() for p in profile.glob("*.json")}
+    def test_extension_installer_uses_factory_selection_and_private_files(self):
+        executable = self.project / "package-fixture.py"
+        capture = self.project / "packages.json"
+        executable.write_text(
+            f"#!{sys.executable}\nimport json, os, pathlib, sys\n"
+            "profile = pathlib.Path(os.environ['PI_CODING_AGENT_DIR'])\n"
+            f"pathlib.Path({str(capture)!r}).write_text(json.dumps({{'args': sys.argv[1:], 'path': str(profile), 'settings': json.loads((profile / 'settings.json').read_text())}}))\n"
+        )
+        executable.chmod(0o755)
+        self.configure("coder_golang", {"executable": str(executable)})
+        self.command("orchestrator/scripts/install_extensions.py", "golang", "coder_golang")
+        recorded = json.loads(capture.read_text())
+        self.assertEqual(recorded["args"], ["update", "--extensions", "--no-approve"])
+        self.assertTrue(Path(recorded["path"]).is_relative_to(self.runtime))
+        self.assertIn("edxeth/pi-ralph-loop", recorded["settings"]["packages"][0]["source"])
+
+    def test_defaults_merge_objects_but_replace_lists(self):
+        self.define("defaults", "pi", {"settings": {"retry": {"enabled": True, "maxRetries": 4}}})
+        self.configure("architect", {"pi": {"settings": {"retry": {"enabled": False}}}, "tools": ["read"]})
         capture, env = self.fake_pi()
-        env["FACTORY_FIXTURE_KEY"] = "fixture-secret-not-a-real-key"
-        planned = json.loads(self.command("orchestrator/session.py", "coordinator", "--factory", "golang", "--dry-run", env=env).stdout)
-        self.assertEqual(planned["runner_configuration"]["provider"], "factory-router")
-        self.assertEqual(planned["runner_configuration"]["model"], "coordinator-model")
-        self.assertIn("No task is selected", planned["instructions"])
-        self.assertIn(str(path), planned["instructions"])
+        self.command("orchestrator/session.py", "architect", self.task, env=env)
+        settings = json.loads(capture.read_text())["settings"]
+        self.assertEqual(settings["retry"], {"enabled": False, "maxRetries": 4})
+        self.assertEqual(settings["defaultTools"], ["read"])
+
+    def test_selected_resources_and_defaults_generate_isolated_native_files(self):
+        capture, env = self.fake_pi()
+        self.define("providers", "unused", {"apiKey": "${MISSING_UNUSED_KEY}"})
+        self.command("orchestrator/session.py", "coder_golang", self.task, env=env)
+        coder = Path(json.loads(capture.read_text())["private_config"])
+        self.assertEqual(set(json.loads((coder / "mcp.json").read_text())["mcpServers"]), {"comms", "gopls"})
+        self.assertEqual(len(json.loads((coder / "settings.json").read_text())["packages"]), 1)
+        self.assertNotIn("unused", json.loads((coder / "models.json").read_text())["providers"])
+        self.command("orchestrator/session.py", "architect", self.task, env=env)
+        architect = Path(json.loads(capture.read_text())["private_config"])
+        self.assertNotEqual(architect, coder)
+        self.assertEqual(set(json.loads((architect / "mcp.json").read_text())["mcpServers"]), {"comms"})
+        self.assertEqual(json.loads((architect / "settings.json").read_text())["packages"], [])
+        self.assertEqual(json.loads((architect / "settings.json").read_text())["defaultThinkingLevel"], "high")
+
+    def test_stale_agent_local_files_cannot_override_factory(self):
+        bundle = self.toolbox / "resources/agents/architect"
+        (bundle / "config.json").write_text('{"model":"wrong"}')
+        (bundle / "config.local.json").write_text('{"model":"wrong"}')
+        (bundle / "pi").mkdir(exist_ok=True)
+        (bundle / "pi/settings.json").write_text('{"defaultModel":"wrong"}')
+        plan = json.loads(self.command("orchestrator/session.py", "architect", self.task, "--dry-run").stdout)
+        self.assertEqual(plan["runner_configuration"]["model"], "test-model")
+
+    def test_unknown_resource_names_and_missing_comms_fail_before_launch(self):
+        for field in ("mcps", "extensions"):
+            self.configure("architect", **{field: ["missing"]})
+            result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", expected=1)
+            self.assertIn("unknown " + field, result.stderr)
+            self.configure("architect", **{field: []})
+        result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", expected=1)
+        self.assertIn("require the comms", result.stderr)
+
+    def test_factory_overrides_generate_private_native_profiles(self):
+        self.define("providers", "another-router", {"apiKey": "${TEAM_GATEWAY_KEY}"})
+        self.configure("architect", {"provider": "another-router", "model": "architect-model", "thinking": "low", "tools": ["read"], "env": {"TEAM_GATEWAY_KEY": "FACTORY_FIXTURE_KEY"}, "pi": {"settings": {"retry": {"enabled": False}}}}, skills=["../../orchestrator/comms/skills/task-comms"])
+        capture, env = self.fake_pi()
+        env["FACTORY_FIXTURE_KEY"] = "fixture-secret"
         self.command("orchestrator/session.py", "architect", self.task, env=env)
         launched = json.loads(capture.read_text())
         self.assertEqual(launched["settings"]["defaultModel"], "architect-model")
         self.assertEqual(launched["settings"]["defaultProvider"], "another-router")
-        self.assertEqual(launched["settings"]["defaultThinkingLevel"], "low")
         self.assertEqual(launched["settings"]["defaultTools"], ["read"])
         self.assertFalse(launched["settings"]["retry"]["enabled"])
         private = Path(launched["private_config"])
         self.assertEqual(json.loads((private / "models.json").read_text())["providers"]["another-router"]["apiKey"], "${TEAM_GATEWAY_KEY}")
-        self.assertIn("extra", json.loads((private / "mcp.json").read_text())["mcpServers"])
+        coder = json.loads(self.command("orchestrator/session.py", "coder_golang", self.task, "--dry-run", env=env).stdout)
+        self.assertEqual(coder["runner_configuration"]["model"], "test-model")
         self.assertNotIn(env["FACTORY_FIXTURE_KEY"], launched["instructions"])
-        self.assertEqual(before, {p.name: p.read_bytes() for p in profile.glob("*.json")})
         rejected = self.command("orchestrator/session.py", "architect", self.task, "--factory", "writing", "--dry-run", env=env, expected=1)
         self.assertIn("conflicts with the task", rejected.stderr)
 
     def test_generated_instructions_identify_document_sources(self):
         root = self.toolbox
-        coordinator = json.loads(self.command("orchestrator/session.py", "coordinator", "--dry-run").stdout)
-        text = coordinator["instructions"]
+        self.command("orchestrator/session.py", "coordinator", "--dry-run", expected=1)
+        selected = json.loads(self.command("orchestrator/session.py", "coordinator", "--factory", "golang", "--dry-run").stdout)
+        text = selected["instructions"]
         self.assertIn(f"Toolkit root: {root}", text)
         self.assertIn(f"Source file: {root / 'orchestrator/SKILL.md'}", text)
-        self.assertIn(f"Source directory for relative references: {root / 'orchestrator'}", text)
-        self.assertIn(str(root / "factories/golang/factory.json"), text)
-        self.assertIn(str(root / "factories/writing/factory.json"), text)
-        selected = json.loads(self.command("orchestrator/session.py", "coordinator", "--factory", "golang", "--dry-run").stdout)
-        self.assertIn(f"Source file: {root / 'factories/golang/README.md'}", selected["instructions"])
-        self.assertIn(f"Source directory for relative references: {root / 'factories/golang'}", selected["instructions"])
+        self.assertIn(f"Source file: {root / 'factories/golang/README.md'}", text)
+        self.assertIn(f"Source directory for relative references: {root / 'factories/golang'}", text)
 
     def test_loop_waits_for_actual_participant_assignment(self):
         sys.path.insert(0, str(SOURCE / "orchestrator"))
@@ -853,21 +874,16 @@ class ToolboxTest(unittest.TestCase):
         client.call.assert_called_once_with("get_task", task_id="task-id")
 
     def test_factory_native_secrets_are_not_copied_into_model_instructions(self):
-        path = self.toolbox / "factories/golang/factory.json"
-        definition = json.loads(path.read_text())
-        for member in definition["agents"]:
-            member["config"] = {"pi": {"models": {"providers": {"private": {"apiKey": "SECRET-PROVIDER-SENTINEL"}}},
-                                      "mcp": {"mcpServers": {"private": {"enabled": False, "headers": {"Authorization": "SECRET-MCP-SENTINEL"}}}}}}
-        path.write_text(json.dumps(definition))
+        self.define("providers", "fixture", {"apiKey": "SECRET-PROVIDER-SENTINEL"})
+        self.define("mcps", "private", {"url": "http://example.invalid/mcp", "headers": {"Authorization": "SECRET-MCP-SENTINEL"}})
         dry = self.command("orchestrator/session.py", "architect", self.task, "--dry-run")
         self.assertNotIn("SECRET-", dry.stdout)
-        self.assertIn('"name": "code_reviewer_golang"', json.loads(dry.stdout)["instructions"])
         capture, env = self.fake_pi()
         self.command("orchestrator/session.py", "architect", self.task, env=env)
         record = json.loads(capture.read_text())
         self.assertNotIn("SECRET-", record["instructions"])
         native = Path(record["private_config"])
-        self.assertEqual(json.loads((native / "models.json").read_text())["providers"]["private"]["apiKey"], "SECRET-PROVIDER-SENTINEL")
+        self.assertEqual(json.loads((native / "models.json").read_text())["providers"]["fixture"]["apiKey"], "SECRET-PROVIDER-SENTINEL")
 
     def test_malformed_task_and_mcp_config_report_errors_without_tracebacks(self):
         task_path = self.task / "task.json"
@@ -878,11 +894,10 @@ class ToolboxTest(unittest.TestCase):
             self.assertIn("task.json", result.stderr)
             self.assertNotIn("Traceback", result.stderr)
         task_path.write_text(original)
-        overlay = self.toolbox / "resources/agents/architect/pi/mcp.local.json"
         for value in ([], None, {"headers": []}, {"cwd": 42}):
-            overlay.write_text(json.dumps({"mcpServers": {"comms": value}}))
+            self.define("mcps", "comms", value)
             result = self.command("orchestrator/session.py", "architect", self.task, "--dry-run", expected=1)
-            self.assertIn("MCP server comms", result.stderr)
+            self.assertTrue("MCP server comms" in result.stderr or "entries must be objects" in result.stderr)
             self.assertNotIn("Traceback", result.stderr)
 
     def test_task_launch_registers_real_instance_and_refuses_silent_replacement(self):
@@ -917,10 +932,10 @@ class ToolboxTest(unittest.TestCase):
         env.update(FACTORY_TASK_ID="stale-task", FACTORY_TASK_DIR="/wrong/task", FACTORY_ROLE="wrong-role")
         for role in ("coordinator", "architect", "architecture_reviewer", "coder_golang", "code_reviewer_golang", "pair_writer"):
             directory = self.toolbox / "orchestrator" if role == "coordinator" else next(path for path in [self.toolbox / "resources/agents" / role, *(self.toolbox / "factories").glob(f"*/agents/{role}")] if path.is_dir())
-            overlay = directory / "pi/settings.local.json"
-            overlay.write_text(json.dumps({"defaultModel": f"{role}-model", "defaultThinkingLevel": "high"}))
+            factory = "writing" if role == "pair_writer" else "golang"
+            self.configure(role, {"model": f"{role}-model", "thinking": "high"}, factory=factory)
             script = directory / "start.sh"
-            planned = subprocess.run([str(script), "--dry-run"], cwd=self.project.parent,
+            planned = subprocess.run([str(script), "--factory", factory, "--dry-run"], cwd=self.project.parent,
                                      env=env, text=True, capture_output=True, timeout=15)
             self.assertEqual(planned.returncode, 0, planned.stderr)
             plan = json.loads(planned.stdout)
@@ -933,7 +948,7 @@ class ToolboxTest(unittest.TestCase):
             self.assertFalse(self.runtime.exists())
         # Exercise exec and the prepared native profile, not only shell syntax.
         script = self.toolbox / "resources/agents/architect/start.sh"
-        started = subprocess.run([str(script)], cwd=self.project.parent, env=env,
+        started = subprocess.run([str(script), "--factory", "golang"], cwd=self.project.parent, env=env,
                                  text=True, capture_output=True, timeout=15)
         self.assertEqual(started.returncode, 0, started.stdout + started.stderr)
         record = json.loads(capture.read_text())
@@ -941,7 +956,7 @@ class ToolboxTest(unittest.TestCase):
         self.assertEqual(record["settings"]["defaultModel"], "architect-model")
         self.assertEqual(record["identity"], {"role": "architect", "project": str(self.project), "task_id": None, "task_dir": None})
         self.assertIn("task-comms", record["instructions"])
-        loop = subprocess.run([str(self.toolbox / "factories/golang/agents/coder_golang/start.sh"), "--loop", "2", "--dry-run"],
+        loop = subprocess.run([str(self.toolbox / "factories/golang/agents/coder_golang/start.sh"), "--factory", "golang", "--loop", "2", "--dry-run"],
                               cwd=self.project, env=env, text=True, capture_output=True, timeout=15)
         self.assertNotEqual(loop.returncode, 0)
         self.assertIn("requires an explicit task", loop.stderr)
@@ -961,7 +976,7 @@ class ToolboxTest(unittest.TestCase):
         broken = subprocess.run([str(script), str(self.task)], cwd=self.project, env=env,
                                 text=True, capture_output=True, timeout=15)
         self.assertNotEqual(broken.returncode, 0)
-        self.assertIn("SKILL.md", broken.stderr)
+        self.assertIn("skill must exist", broken.stderr)
         self.assertFalse(capture.exists())
 
 

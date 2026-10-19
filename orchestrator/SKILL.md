@@ -55,4 +55,4 @@ Follow the recipe's bounded review loops. Surface unresolved disagreements rathe
 
 ## Toolkit updates
 
-Team recipes, member configuration, and custom agents belong under `factories/`. Use member overrides or `config.local.json` for local customization of shared bundles. When asked to update the toolkit, use the [preview-first updater](../docs/toolkit-updates.md); inspect conflicts before applying. Never overwrite team factories or delete a hash baseline to bypass a conflict. Dependency installation through `make update` remains separate from toolkit synchronization.
+Team recipes, member configuration, and custom agents belong under `factories/`. Set execution defaults, member overrides, and resource selections in the selected factory.json. Agent directories contain instructions and resources, not separate execution configuration. When asked to update the toolkit, use the [preview-first updater](../docs/toolkit-updates.md); inspect conflicts before applying. Never overwrite team factories or delete a hash baseline to bypass a conflict. Dependency installation through `make update` remains separate from toolkit synchronization.

@@ -191,3 +191,9 @@ A preview-first copy updater records managed file hashes and refuses conflicting
 **Status:** Implemented; live Herdr acceptance pending
 
 The coordinator entrypoint validates configuration, starts local Compose or connects to an explicit endpoint, waits for MCP connectivity, and supervises a project delivery bridge inside Herdr. Check-only modes remain free of service startup. Exiting cleans up the owned bridge, not shared services. Startup distinguishes service connectivity from task identity, pane binding and delivery readiness; an unassigned coordinator still establishes those through the existing task/binding protocol. Outside Herdr, manual inbox polling is explicit.
+
+## FACT-015 — One authored factory configuration
+
+**Status:** Implemented
+
+`factory.json` owns execution defaults, member overrides, provider definitions, MCP/extension catalogs and skill selections. `session.py` resolves it and generates private native Pi files before launch. Agent-local configuration and native input profiles are removed. Factory selection is explicit; there is no global coordinator profile. Tests cover isolation, inheritance, generated settings, unused resources, credential boundaries, and native Pi startup without model inference.

@@ -7,7 +7,6 @@ import contextlib
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 from pathlib import Path
@@ -23,13 +22,6 @@ def object_file(path: Path) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"expected a JSON object: {path}")
     return value
-
-
-def merge(base: dict, overlay: dict) -> dict:
-    result = copy.deepcopy(base)
-    for key, value in overlay.items():
-        result[key] = merge(result[key], value) if isinstance(result.get(key), dict) and isinstance(value, dict) else copy.deepcopy(value)
-    return result
 
 
 def environment_references(value: object) -> set[str]:
@@ -60,21 +52,8 @@ def private_auth_file(config: dict, field: str, environment: dict) -> Path | Non
 
 
 def load(directory: Path, config: dict, project: Path, session: Path, environment: dict) -> dict:
-    configured_path = config.get("config_dir", "pi")
-    if not isinstance(configured_path, str) or not configured_path:
-        raise ValueError("Pi config_dir must be a nonempty directory path")
-    source = (directory / configured_path).resolve()
-    if not source.is_relative_to(ROOT) or not source.is_dir():
-        raise ValueError("Pi config_dir must be a directory inside the portable toolbox")
-    files = {}
-    for name in FILES:
-        base = object_file(source / f"{name}.json")
-        local = source / f"{name}.local.json"
-        files[name] = merge(base, object_file(local)) if local.exists() else base
-    # Factory member overrides are applied to private native files, never to the
-    # reusable authored profile. Lists replace; objects merge recursively.
-    for name, overlay in config.get("pi", {}).items():
-        files[name] = merge(files[name], overlay)
+    # Factory configuration is the sole authored source. Native files are output.
+    files = {name: copy.deepcopy(config.get("pi", {}).get(name, {})) for name in FILES}
     settings = files["settings"]
     for field, native in {"provider": "defaultProvider", "model": "defaultModel", "thinking": "defaultThinkingLevel", "tools": "defaultTools"}.items():
         if field in config:
@@ -83,7 +62,7 @@ def load(directory: Path, config: dict, project: Path, session: Path, environmen
     provider, model = settings.get("defaultProvider"), settings.get("defaultModel")
     for name, value in (("defaultProvider", provider), ("defaultModel", model)):
         if value is not None and (not isinstance(value, str) or not value.strip()):
-            raise ValueError(f"{source}/settings.json: {name} must be a nonempty string when configured")
+            raise ValueError(f"factory.json: {name} must be a nonempty string when configured")
     providers = models.get("providers", {})
     servers = mcp.get("mcpServers", {})
     if not isinstance(providers, dict) or not isinstance(servers, dict):
@@ -129,26 +108,20 @@ def load(directory: Path, config: dict, project: Path, session: Path, environmen
     # Parent/session environment must not redirect these explicit runtime choices.
     environment.pop("PI_CODING_AGENT_SESSION_DIR", None)
     return {
-        "source": source, "target": target, "files": files, "auth_files": auth_files,
+        "target": target, "files": files, "auth_files": auth_files,
         "required_env": sorted(required), "enabled_mcps": enabled,
         "summary": {
-            "source_dir": str(source), "runtime_dir": str(target),
+            "configuration_source": "factory.json", "runtime_dir": str(target),
             "provider": provider, "model": model, "thinking": settings.get("defaultThinkingLevel"),
             "configured": bool(provider and model), "enabled_mcps": enabled,
+            "tools": settings.get("defaultTools", []), "extensions": config.get("extensions", []),
             "required_environment": sorted(required), "shared_auth_files": sorted(auth_files),
         },
     }
 
 
 def materialize(profile: dict) -> None:
-    # Keep native relative resource paths valid without rewriting Pi's schema.
-    # Credential/trust state is never imported from the authored profile.
-    ignored = shutil.ignore_patterns("*.local.json", "auth.json", "mcp-auth.json", "trust.json", "*.log", "__pycache__")
-    shutil.copytree(profile["source"], profile["target"], ignore=ignored)
-    # copytree preserves source modes, including a read-only checkout's modes.
-    # Runtime files must remain writable and private regardless of their source.
-    for path in [profile["target"], *profile["target"].rglob("*")]:
-        path.chmod(0o700 if path.is_dir() else 0o600 | (path.stat().st_mode & 0o100))
+    profile["target"].mkdir(parents=True, mode=0o700)
     for name, value in profile["files"].items():
         write_json(profile["target"] / f"{name}.json", value)
     for name, source in profile["auth_files"].items():

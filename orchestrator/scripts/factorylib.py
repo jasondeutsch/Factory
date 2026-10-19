@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -84,6 +85,16 @@ def print_json(data: object) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def merge_configuration(defaults: dict, overrides: dict) -> dict:
+    """Merge objects recursively; replace lists/scalars without mutating inputs."""
+    result = copy.deepcopy(defaults)
+    for key, value in overrides.items():
+        result[key] = (merge_configuration(result[key], value)
+                       if isinstance(result.get(key), dict) and isinstance(value, dict)
+                       else copy.deepcopy(value))
+    return result
+
+
 def factory_definition(name: str) -> dict:
     """Read explicit factory membership and validate references before use."""
     if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_-]*", name):
@@ -95,6 +106,15 @@ def factory_definition(name: str) -> dict:
     definition = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(definition, dict) or definition.get("name") != name:
         raise ValueError(f"{path}: name must match its factory directory")
+    allowed = {"name", "owner", "defaults", "providers", "mcps", "extensions", "agents"}
+    if set(definition) - allowed:
+        raise ValueError(f"{path}: unknown factory fields: {sorted(set(definition) - allowed)}")
+    for field in ("defaults", "providers", "mcps", "extensions"):
+        if not isinstance(definition.get(field, {}), dict):
+            raise ValueError(f"{path}: {field} must be an object")
+    for field in ("providers", "mcps"):
+        if any(not isinstance(value, dict) for value in definition.get(field, {}).values()):
+            raise ValueError(f"{path}: {field} entries must be objects")
     members = definition.get("agents")
     if not isinstance(members, list) or not members:
         raise ValueError(f"{path}: agents must be a nonempty list of names and paths")
@@ -102,6 +122,8 @@ def factory_definition(name: str) -> dict:
     for member in members:
         if not isinstance(member, dict) or not isinstance(member.get("name"), str):
             raise ValueError(f"{path}: each agent needs a name and path")
+        if set(member) - {"name", "path", "config", "skills", "mcps", "extensions", "handoff"}:
+            raise ValueError(f"{path}: unknown agent fields")
         role = member["name"]
         actor(role)
         if role in names:
@@ -119,19 +141,39 @@ def factory_definition(name: str) -> dict:
         overrides = member.get("config", {})
         if not isinstance(overrides, dict):
             raise ValueError(f"{path}: agent {role} config must be an object")
-        supported = {"provider", "model", "thinking", "tools", "pi", "runner", "config_dir", "skills", "args", "env", "executable", "command", "auth_file_env", "mcp_auth_file_env", "check_timeout_seconds"}
+        # Validate the same effective fields that session.py will resolve.
+        overrides = merge_configuration(definition.get("defaults", {}), overrides)
+        for field in ("skills", "mcps", "extensions"):
+            if field in member:
+                overrides[field] = member[field]
+        if not isinstance(overrides, dict):
+            raise ValueError(f"{path}: agent {role} config must be an object")
+        supported = {"provider", "model", "thinking", "tools", "pi", "runner", "skills", "mcps", "extensions", "args", "env", "executable", "command", "auth_file_env", "mcp_auth_file_env", "check_timeout_seconds"}
         unknown = set(overrides) - supported
         if unknown:
             raise ValueError(f"{path}: unsupported agent config fields: {', '.join(sorted(unknown))}")
         for field in ("provider", "model", "thinking"):
             if field in overrides and (not isinstance(overrides[field], str) or not overrides[field].strip()):
                 raise ValueError(f"{path}: agent {role} config.{field} must be a nonempty string")
-        for field in ("skills", "tools"):
+        for field in ("skills", "tools", "mcps", "extensions"):
             if field in overrides and (not isinstance(overrides[field], list) or any(not isinstance(item, str) or not item for item in overrides[field])):
                 raise ValueError(f"{path}: agent {role} config.{field} must be a list of nonempty strings")
+        for field in ("mcps", "extensions"):
+            for reference in overrides.get(field, []):
+                if reference not in definition.get(field, {}):
+                    raise ValueError(f"{path}: agent {role} references unknown {field}: {reference}")
         native = overrides.get("pi", {})
-        if not isinstance(native, dict) or set(native) - {"settings", "models", "mcp"} or any(not isinstance(value, dict) for value in native.values()):
-            raise ValueError(f"{path}: agent {role} config.pi accepts settings, models, and mcp objects")
+        if not isinstance(native, dict) or set(native) - {"settings"} or any(not isinstance(value, dict) for value in native.values()):
+            raise ValueError(f"{path}: agent {role} config.pi accepts a settings object; use factory providers, mcps, and extensions for definitions")
+        if any(key in native.get("settings", {}) for key in ("packages", "defaultProvider", "defaultModel", "defaultThinkingLevel", "defaultTools")):
+            raise ValueError(f"{path}: use provider, model, thinking, tools and extensions instead of duplicate Pi settings")
+        for reference in overrides.get("skills", []):
+            skill = (directory / reference).resolve()
+            if not skill.is_relative_to(ROOT.resolve()) or not (skill / "SKILL.md" if skill.is_dir() else skill).is_file():
+                raise ValueError(f"{path}: skill must exist inside the toolkit: {reference}")
+        for value in definition.get("extensions", {}).values():
+            if not isinstance(value, (str, dict)) or (isinstance(value, dict) and not isinstance(value.get("source"), str)):
+                raise ValueError(f"{path}: extension must be a native package source or object with source")
         reference = member.get("path")
         if not isinstance(reference, str) or not reference.strip() or Path(reference).is_absolute():
             raise ValueError(f"{path}: agent {role} needs a relative bundle path")
@@ -139,8 +181,8 @@ def factory_definition(name: str) -> dict:
         if not bundle.is_relative_to(ROOT.resolve()):
             raise ValueError(f"{path}: agent {role} path must stay inside the toolkit")
         instruction = "SKILL.md" if role == "coordinator" else "agent.md"
-        if not (bundle / "config.json").is_file() or not (bundle / instruction).is_file():
-            raise ValueError(f"{path}: agent {role} bundle is missing config.json or {instruction}: {reference}")
+        if not (bundle / instruction).is_file():
+            raise ValueError(f"{path}: agent {role} bundle is missing {instruction}: {reference}")
     if not isinstance(definition.get("owner"), str) or definition["owner"] not in names:
         raise ValueError(f"{path}: owner must name a member agent")
     if not (directory / "README.md").is_file():
@@ -151,19 +193,13 @@ def factory_definition(name: str) -> dict:
 def agent_directory(role: str, factory: str | None = None) -> Path:
     """Use declared paths, never infer membership from directory placement."""
     actor(role)
-    if factory is None and role == "coordinator":
-        return ROOT / "orchestrator"  # Bootstrap before the user selects a factory.
-    configurations = [ROOT / "factories" / factory / "factory.json"] if factory else sorted((ROOT / "factories").glob("*/factory.json"))
-    matches = set()
-    for path in configurations:
-        definition = factory_definition(path.parent.name)
-        for member in definition["agents"]:
-            if member["name"] == role:
-                matches.add((path.parent / member["path"]).resolve())
+    if factory is None:
+        raise ValueError("select a factory with --factory <name> or an explicit task directory")
+    definition = factory_definition(factory)
+    matches = [member for member in definition["agents"] if member["name"] == role]
     if len(matches) != 1:
-        scope = f" in factory {factory}" if factory else " across factory configurations; supply a task to select its factory"
-        raise ValueError(f"expected one declared agent bundle for {role}{scope}, found {len(matches)}")
-    return matches.pop()
+        raise ValueError(f"expected one declared agent bundle for {role} in factory {factory}, found {len(matches)}")
+    return (ROOT / "factories" / factory / matches[0]["path"]).resolve()
 
 
 def factory_recipe(name: str) -> Path:

@@ -6,7 +6,7 @@ Keep one `.factory/` directory in the application repository. No upstream subdir
 | --- | --- |
 | `factories/` | Team-owned recipes, member configuration, custom agents and skills. Seeded once on install; never overwritten by toolkit updates. |
 | `orchestrator/`, `resources/`, `docs/`, root README/Makefile/gitignore | Toolkit-owned defaults. Updates replace only files whose local version matches the recorded baseline. |
-| `config.local.json`, native `*.local.json`, auth/trust files | Local overrides; excluded from source copying and managed updates. |
+| Auth/trust files, environment files, `*.local.json` | Private files excluded from source copying and managed updates; not configuration layers. |
 | `tasks/`, runtime directories and databases | Execution data; never synchronized. |
 | `.toolkit.json` | Hash baseline for managed files; retain it with the copied toolkit. No configuration or credentials. |
 

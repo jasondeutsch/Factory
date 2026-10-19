@@ -1,16 +1,91 @@
 {
   "name": "golang",
   "owner": "coordinator",
+  "defaults": {
+    "runner": "pi",
+    "provider": "team-gateway",
+    "model": "your-model-id",
+    "thinking": "medium",
+    "tools": [
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "grep",
+      "find",
+      "ls"
+    ],
+    "mcps": [
+      "comms"
+    ],
+    "check_timeout_seconds": 30
+  },
+  "providers": {
+    "team-gateway": {
+      "baseUrl": "https://gateway.example.com/v1",
+      "api": "openai-completions",
+      "apiKey": "${TEAM_MODEL_API_KEY}",
+      "models": [
+        {
+          "id": "your-model-id"
+        }
+      ]
+    }
+  },
+  "mcps": {
+    "comms": {
+      "url": "http://127.0.0.1:8090/mcp",
+      "description": "Factory task status, inbox messages, decisions, evidence, usage, and reports.",
+      "exposure": "codemode"
+    },
+    "linear": {
+      "url": "https://mcp.linear.app/mcp/readonly",
+      "headers": {
+        "Authorization": "Bearer ${LINEAR_API_KEY}"
+      },
+      "description": "Read requested Linear issues, comments, projects, and related planning context.",
+      "exposure": "codemode"
+    },
+    "gopls": {
+      "command": "gopls",
+      "args": [
+        "mcp"
+      ],
+      "description": "Explore and diagnose the Go project using gopls.",
+      "exposure": "codemode"
+    }
+  },
+  "extensions": {
+    "ralph": {
+      "source": "git:github.com/edxeth/pi-ralph-loop@108823f8d1e2089fec1f7202ca3a8905d12df574",
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  },
   "agents": [
     {
       "name": "coordinator",
       "path": "../../orchestrator",
-      "config": {}
+      "skills": [
+        "../../orchestrator/comms/skills/task-comms"
+      ]
     },
     {
       "name": "architect",
       "path": "../../resources/agents/architect",
-      "config": {},
+      "skills": [
+        "../../orchestrator/comms/skills/task-comms",
+        "../../resources/agents/architect/skills/spec-and-plan",
+        "../../resources/agents/architect/skills/software-architecture",
+        "../../resources/agents/architect/skills/domain-modeling",
+        "../../resources/skills/conventional-commits",
+        "../../resources/skills/evidence-based-debugging",
+        "../../resources/skills/linear-context"
+      ],
+      "config": {
+        "thinking": "high"
+      },
       "handoff": {
         "require_artifacts": true,
         "require_limitations": true
@@ -19,7 +94,16 @@
     {
       "name": "architecture_reviewer",
       "path": "../../resources/agents/architecture_reviewer",
-      "config": {},
+      "skills": [
+        "../../orchestrator/comms/skills/task-comms",
+        "../../resources/agents/architecture_reviewer/skills/architecture-challenge",
+        "../../resources/skills/conventional-commits",
+        "../../resources/skills/evidence-based-debugging",
+        "../../resources/skills/linear-context"
+      ],
+      "config": {
+        "thinking": "high"
+      },
       "handoff": {
         "require_artifacts": true,
         "require_limitations": true
@@ -28,7 +112,23 @@
     {
       "name": "coder_golang",
       "path": "agents/coder_golang",
-      "config": {},
+      "skills": [
+        "../../orchestrator/comms/skills/task-comms",
+        "agents/coder_golang/skills/go-implementation",
+        "skills/go-code-quality",
+        "skills/go-testing",
+        "skills/go-concurrency",
+        "../../resources/skills/conventional-commits",
+        "../../resources/skills/evidence-based-debugging",
+        "../../resources/skills/bounded-iteration"
+      ],
+      "mcps": [
+        "gopls",
+        "comms"
+      ],
+      "extensions": [
+        "ralph"
+      ],
       "handoff": {
         "require_artifacts": true,
         "require_limitations": true,
@@ -38,7 +138,24 @@
     {
       "name": "code_reviewer_golang",
       "path": "agents/code_reviewer_golang",
-      "config": {},
+      "skills": [
+        "../../orchestrator/comms/skills/task-comms",
+        "agents/code_reviewer_golang/skills/go-review",
+        "agents/code_reviewer_golang/skills/critical-code-review",
+        "skills/go-code-quality",
+        "skills/go-testing",
+        "skills/go-concurrency",
+        "../../resources/skills/conventional-commits",
+        "../../resources/skills/evidence-based-debugging",
+        "../../resources/skills/linear-context"
+      ],
+      "mcps": [
+        "gopls",
+        "comms"
+      ],
+      "config": {
+        "thinking": "high"
+      },
       "handoff": {
         "require_artifacts": true,
         "require_limitations": true,

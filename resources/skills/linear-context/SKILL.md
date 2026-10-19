@@ -5,7 +5,7 @@ description: Read requested Linear issues through the configured Linear MCP and 
 
 # Linear context
 
-Use when asked to pull a Linear issue or assess task documents against it. Use the role's native Linear MCP connection and discover its actual read tools; do not invent tool names. The starter connection uses Linear's official read-only endpoint and is disabled until configured. Ask the coordinator to enable it in `pi/mcp.local.json` with `LINEAR_API_KEY` available, then reconnect or start a configured session. Do not claim that reading this skill registers an MCP in an existing session.
+Use when asked to pull a Linear issue or assess task documents against it. Use the role's native Linear MCP connection and discover its actual read tools; do not invent tool names. The starter connection uses Linear's official read-only endpoint and is disabled until configured. Ask the coordinator to select `linear` in the member's `mcps` list in `factory.json` with `LINEAR_API_KEY` available, then reconnect or start a configured session. Do not claim that reading this skill registers an MCP in an existing session.
 
 Resolve the requested issue identifier or URL and confirm its workspace/project when ambiguous. Read the description, acceptance criteria, relevant comments, and linked dependencies as needed. Avoid importing an entire backlog. Record the issue identifier, URL, retrieval time, and a concise source summary in the task's artifacts so later sessions know which context informed the work. Never copy authentication data into the task.
 
