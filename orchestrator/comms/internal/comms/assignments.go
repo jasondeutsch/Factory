@@ -246,6 +246,15 @@ func publishAssignment(ctx context.Context, tx *sql.Tx, assignment Assignment, s
 	if err != nil {
 		return err
 	}
+	if eventKind == "assignment_submitted" || (eventKind == "assignment_updated" && oneOf(assignment.State, "blocked", "needs_input")) {
+		kind := "blocker"
+		if eventKind == "assignment_submitted" {
+			kind = "review"
+		}
+		if _, err := createAttention(ctx, tx, RequestAttentionInput{TaskID: assignment.TaskID, Actor: sender, Recipient: recipient, Kind: kind, Title: assignment.Title, Detail: assignment.Summary, References: []string{assignment.ID}}); err != nil {
+			return err
+		}
+	}
 	data, err := json.Marshal(map[string]any{"assignment_id": assignment.ID, "state": assignment.State, "version": assignment.Version, "assignee_id": assignment.Assignee, "message_id": messageID, "recipient": recipient, "result": assignment.Result})
 	if err != nil {
 		return err

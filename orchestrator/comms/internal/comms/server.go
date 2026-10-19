@@ -47,6 +47,9 @@ func registerTool[Input, Output any](server *mcp.Server, name, description strin
 
 func MCPServer(store *Store) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory-comms", Version: "0.1.0"}, &mcp.ServerOptions{Instructions: "Shared Factory task records. Always use an explicit project and task. Role names and evidence are declared by clients, not authenticated. Stored messages do not wake idle agents. Do not put credentials in records. Missing usage is unknown. Use structured assignments and participants for ownership and results; ordinary messages are conversation, not assignment state. This server does not execute workflows or read host artifacts."})
+	registerTool(server, "request_attention", "Request a human/owner decision, question, review or failure triage. Record concrete options and evidence references; does not grant authority.", false, store.RequestAttention)
+	registerTool(server, "resolve_attention", "Owner records the actual resolution with an expected version. Does not approve artifacts, transfer work, or change task state.", false, store.ResolveAttention)
+	registerTool(server, "get_coordinator_inbox", "Read pending decisions and handoffs plus delivery failures. Reading messages does not resolve these items.", true, store.InboxSummary)
 	registerTool(server, "set_task_factory", "Record immutable public factory membership; never include native settings or credentials. Safe to repeat unchanged.", false, store.SetTaskFactory)
 	registerTool(server, "get_task_status", "Read the same dynamic task summary used by the status page, with configured members, actual instances, work and contact state. Bounded records are marked partial.", true, store.Status)
 	registerTool(server, "record_session", "Record an immutable prepared session manifest. Exclude credentials and raw native configuration. Declared snapshot, not proof of model activity.", false, store.RecordSession)

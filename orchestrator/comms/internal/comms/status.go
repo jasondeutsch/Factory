@@ -78,6 +78,7 @@ type MemberStatus struct {
 	Instances []Participant `json:"instances"`
 }
 type TaskStatus struct {
+	Inbox    CoordinatorInbox `json:"inbox"`
 	Report   TaskReport       `json:"report"`
 	Factory  *FactorySnapshot `json:"factory,omitempty"`
 	Members  []MemberStatus   `json:"members"`
@@ -112,7 +113,8 @@ func (s *Store) Status(ctx context.Context, in TaskInput) (TaskStatus, error) {
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return out, err
 	}
-	return out, nil
+	out.Inbox, err = s.InboxSummary(ctx, in)
+	return out, err
 }
 
 //go:embed status.html

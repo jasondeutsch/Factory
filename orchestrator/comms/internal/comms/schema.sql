@@ -112,3 +112,10 @@ CREATE TABLE IF NOT EXISTS task_factories (
  task_id TEXT PRIMARY KEY REFERENCES tasks(id),
  snapshot TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS attention (
+ id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), kind TEXT NOT NULL,
+ recipient TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, options TEXT NOT NULL,
+ refs TEXT NOT NULL, state TEXT NOT NULL, version INTEGER NOT NULL,
+ resolution TEXT NOT NULL, explanation TEXT NOT NULL, created_at TEXT NOT NULL, resolved_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS attention_task ON attention(task_id,state,id);

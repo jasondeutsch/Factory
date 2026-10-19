@@ -155,3 +155,9 @@ Offer a factory-wide check using the existing member startup checks. Report read
 **Status:** Implemented
 
 A read-only auto-refreshing task page and `get_task_status` share the same records. Immutable public factory membership distinguishes configured members from actual instances. Assignment edges show recorded dispatches; contact, work state, messages and results remain distinct. No Go-specific members or planned graph are hardcoded.
+
+## FACT-009 — Actionable coordinator inbox
+
+**Status:** Implemented
+
+Versioned, explicitly resolved attention items collect decisions, review handoffs and blockers. Dispatch failures and delivery failures are visible without interpreting terminal prose. Human authority and artifact approvals remain explicit; closing an inbox item does not change work state.

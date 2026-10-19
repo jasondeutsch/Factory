@@ -187,3 +187,9 @@ Rebuild/restart comms to expose the new tools; schema 4 adds session snapshots w
 Open `/tasks/<task-id>/status` for a read-only page refreshed every ten seconds. `get_task_status` and `/tasks/<task-id>/status.json` expose the same summary. Existing bearer-token protection applies to all three; use a client/proxy that supplies the authorization header when enabled. The page contains no mutation controls.
 
 Local task attachment publishes only the selected factory's name, owner, and member names/paths through `set_task_factory`. That task snapshot is immutable and contains no native provider configuration. Configured members without instances appear as not started; actual registrations, assignments, handoffs, messages and contact come from comms. The diagram shows actual assignment edges, not an inferred recipe sequence. Older tasks without a snapshot explicitly show membership as unknown. Large views flag bounded assignment/participant data; use MCP pagination for the rest.
+
+## Coordinator inbox
+
+`get_coordinator_inbox` returns open attention items and unresolved delivery failures. `request_attention` supports questions, approvals, reviews, failures, and blockers, with a named recipient, options, and evidence references. Submitted assignment results and blocked/needs-input updates create items transactionally. Dispatch failures link their private recovery receipt.
+
+Only the declared task owner records `resolve_attention`, using the current version and actual explanation. Retried resolutions are idempotent. This does not authenticate a human, approve an artifact, change assignment state, or authorize work. Resolve historical blockers after reconciliation; an assignment progressing again does not silently answer its earlier question. The status page displays this inbox read-only. Existing message acknowledgement remains separate.

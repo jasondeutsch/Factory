@@ -156,12 +156,27 @@ def dispatch(args):
             receipt["assignment_id"] = assignment["id"]
             save("assigned")
             bridge("--project", record["project"], "--task", record["id"], "--notify", participant["routing_identity"], "--agent", receipt["name"])
+            if receipt.get("attention_id"):
+                pending = client.call("get_coordinator_inbox", task_id=record["id"])["items"]
+                item = next((item for item in pending if item["id"] == receipt["attention_id"]), None)
+                if item:
+                    client.call("resolve_attention", task_id=record["id"], attention_id=item["id"],
+                                actor_participant_id=args.owner, expected_version=item["version"], resolution="recovered",
+                                explanation="The same dispatch operation recovered and checked notification delivery", request_key="dispatch-resolved-" + key)
             receipt.pop("error", None)
             save("notification_checked")
             print_json(receipt)
             return 0
         except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
             receipt["error"] = str(error)
+            try:
+                attention = client.call("request_attention", task_id=record["id"], actor_participant_id=args.owner,
+                                        recipient=record["owner"], kind="failure", title="Dispatch needs inspection",
+                                        detail="Inspect the saved dispatch receipt and live pane before retrying; no automatic relaunch is authorized",
+                                        references=[str(path)], request_key="dispatch-attention-" + key)
+                receipt["attention_id"] = attention["id"]
+            except (OSError, ValueError):
+                receipt["attention_recorded"] = False
             write_json(path, receipt)
             print_json(receipt)
             return 1

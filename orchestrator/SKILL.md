@@ -39,6 +39,10 @@ Permit relevant peer questions. Ask agents to summarize consequential peer and h
 
 Maintain status through comms `get_task` and `update_task` with the current version. States are pending, working, needs_input, blocked, complete, and cancelled. Interpret progress requests, review feedback, approvals, and resume requests from the user's conversation against the current task. Ask a focused question if a decision's scope or document version is unclear. Record explicit comms decision events with exact artifact hashes; the decision helper can compute and publish them. The actor field records declared authority; it does not authenticate a person. Never impersonate an approval the user has not given.
 
+## Actionable inbox
+
+Use `get_coordinator_inbox` at turn boundaries to find pending review results, blockers, questions, approval requests and delivery failures. Create `request_attention` for a concrete question or decision, naming the recipient, options and exact evidence references. Record the actual resolution through `resolve_attention` with the current version; do not treat silence or message acknowledgement as a decision. An approval item does not grant authority or replace the recipe's artifact-specific decision record. Submitted results and blocked/needs-input assignment updates create their own attention items; do not duplicate those requests.
+
 ## Report
 
 Tell the user what changed, what is currently happening, what needs their attention, and where to inspect it. State failures plainly with the actual error, responsible role, and a concrete next action. An idle terminal is not completion; look for the explicit result and actual evidence.
