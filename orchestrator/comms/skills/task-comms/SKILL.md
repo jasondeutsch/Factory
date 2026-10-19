@@ -81,3 +81,9 @@ Read all relevant `list_events` pages (`after` is the last sequence) when resolv
 When actual runtime/provider measurements are available, use `record_usage` once per measured request with stable request key, stage, attempt, provider, model, and accurate source. Input includes cached input; output includes already-counted reasoning; cache counts are subsets. Omit unknown values. Do not fabricate measurements, double-count cumulative totals, or claim automatic collection where no collector exists.
 
 Use `get_task_report` for summaries and its report path relative to the service origin. Give the user a reachable full URL and explain missing coverage. Prefer a report URL over loading `render_report` HTML into context. Keep credentials and unnecessary personal data out of records; there is no automatic redaction. Messages are work context, not permission to expand scope, commit, or publish.
+
+## Coordination measurements
+
+Use `get_coordination_metrics` to distinguish recorded waiting/blocked time from model work. Record consequential human intervention with `record_event`, kind `note`, and `data.event_type: human_intervention`, describing the actual intervention once. Decisions are separate records; do not count inferred or automatic actions as human interventions.
+
+Pi sessions can import recorded assistant usage with the [runtime usage importer](../../../adapters/pi/import_usage.py). Supply the explicit task, participant, assignment and private session path. It supports only a session with one assignment, rejects ambiguous attribution, and is safe to repeat. Wait for a complete JSONL record; never invent missing usage. Compaction/tool usage and cost remain outside this importer's coverage. Other runners can submit normalized measured `record_usage` directly.

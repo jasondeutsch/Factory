@@ -47,6 +47,7 @@ func registerTool[Input, Output any](server *mcp.Server, name, description strin
 
 func MCPServer(store *Store) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory-comms", Version: "0.1.0"}, &mcp.ServerOptions{Instructions: "Shared Factory task records. Always use an explicit project and task. Role names and evidence are declared by clients, not authenticated. Stored messages do not wake idle agents. Do not put credentials in records. Missing usage is unknown. Use structured assignments and participants for ownership and results; ordinary messages are conversation, not assignment state. This server does not execute workflows or read host artifacts."})
+	registerTool(server, "get_coordination_metrics", "Recorded acceptance latency, closed blocked intervals, first notification latency, review handoffs and declared interventions. Missing timing samples are unknown; no productivity inference.", true, store.Metrics)
 	registerTool(server, "request_attention", "Request a human/owner decision, question, review or failure triage. Record concrete options and evidence references; does not grant authority.", false, store.RequestAttention)
 	registerTool(server, "resolve_attention", "Owner records the actual resolution with an expected version. Does not approve artifacts, transfer work, or change task state.", false, store.ResolveAttention)
 	registerTool(server, "get_coordinator_inbox", "Read pending decisions and handoffs plus delivery failures. Reading messages does not resolve these items.", true, store.InboxSummary)

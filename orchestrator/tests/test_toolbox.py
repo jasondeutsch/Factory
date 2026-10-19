@@ -228,6 +228,26 @@ class ToolboxTest(unittest.TestCase):
         self.assertEqual(calls.count(["pane","run"]), 1)
         self.assertEqual(client.call("list_assignments",task_id=task_id)["assignments"], [])
 
+    def test_usage_import_is_attributed_and_idempotent(self):
+        sys.path.insert(0, str(SOURCE / "orchestrator/comms"))
+        from client import Client
+        client = Client(self.env)
+        task_id = json.loads((self.task / "task.json").read_text())["comms_id"]
+        def register(role):
+            return client.call("register_participant", task_id=task_id, role=role, routing_identity=role, instance_id="usage-"+role, request_key=role)
+        owner,worker=register("coordinator"),register("coder")
+        assignment=client.call("create_assignment",task_id=task_id,assigning_participant_id=owner["id"],assignee_id=worker["id"],title="Build",instructions="Scope",expected_output=["code"],stage="build",attempt=1,request_key="assign")
+        path=self.runtime/worker["instance_id"]/"session.jsonl"
+        path.parent.mkdir(parents=True)
+        rows=[{"type":"session","version":3,"id":"session", "cwd":str(self.project)}, {"type":"message","id":"response","message":{"role":"assistant","provider":"fixture","model":"model","stopReason":"stop","usage":{"input":2,"output":3,"cacheRead":1,"cacheWrite":0,"totalTokens":6}}}]
+        path.write_text("".join(json.dumps(row)+"\n" for row in rows))
+        for _ in range(2):
+            self.command("orchestrator/adapters/pi/import_usage.py",self.task,"--session",path,"--participant",worker["id"],"--assignment",assignment["id"])
+        report=client.call("get_task_report",task_id=task_id)
+        self.assertEqual(report["usage"]["records"],1)
+        self.assertEqual(report["usage"]["total_tokens"],6)
+        self.assertIsNone(report["usage"]["cost_usd"])
+
     def test_task_location_name_resolution_and_html_escaping(self):
         self.assertEqual(self.task.parent, self.toolbox / "tasks")
         self.assertRegex(self.task.name, r"^\d{8}T\d{9}Z-mixed-case-task")

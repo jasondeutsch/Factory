@@ -193,3 +193,17 @@ Local task attachment publishes only the selected factory's name, owner, and mem
 `get_coordinator_inbox` returns open attention items and unresolved delivery failures. `request_attention` supports questions, approvals, reviews, failures, and blockers, with a named recipient, options, and evidence references. Submitted assignment results and blocked/needs-input updates create items transactionally. Dispatch failures link their private recovery receipt.
 
 Only the declared task owner records `resolve_attention`, using the current version and actual explanation. Retried resolutions are idempotent. This does not authenticate a human, approve an artifact, change assignment state, or authorize work. Resolve historical blockers after reconciliation; an assignment progressing again does not silently answer its earlier question. The status page displays this inbox read-only. Existing message acknowledgement remains separate.
+
+## Coordination measurements
+
+`get_coordination_metrics` and the report show offered-to-accepted time, closed blocked/needs-input intervals, first-notification latency, pending assignments, submitted handoffs, failures, decisions and explicitly recorded human interventions. Timing uses server-recorded events across the complete task, not the bounded browser timeline. No samples means unknown. Open blocked intervals are excluded until closed; submitted handoffs are not verified review cycles. Record human feedback once with `record_event` and `data.event_type: human_intervention`.
+
+The Pi adapter provides a repeatable, explicit importer:
+
+```sh
+python3 .factory/orchestrator/adapters/pi/import_usage.py <task-directory> \
+  --session <private-runtime-instance/session.jsonl> \
+  --participant <participant-id> --assignment <assignment-id>
+```
+
+It reads Pi v3 session records, verifies the runtime instance and single-assignment attribution, and deduplicates by participant/session/entry ID. It attributes the session's assistant requests, including startup overhead, to that sole assignment. Cache input is included once; reasoning is already in output. It rejects incomplete records and inconsistent counts. It does not import tool/compaction usage, estimate unreported tokens, or treat Pi's locally estimated price as billed cost. Coverage is therefore partial, explicitly reported, and cost remains unknown. Other runtimes use `record_usage` directly with stable request keys.

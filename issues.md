@@ -167,3 +167,9 @@ Versioned, explicitly resolved attention items collect decisions, review handoff
 **Status:** Implemented
 
 Assignments retain explicit artifact/check/limitation requirements. Factory members provide defaults for dispatch; each assignment can override them. Incomplete successful submissions are rejected before publishing, while failures can explain missing evidence. Completeness validation does not execute checks or make review judgments.
+
+## FACT-011 — Coordination overhead and measured usage
+
+**Status:** Implemented
+
+Task-wide recorded timing separates assignment acceptance, closed blocked intervals and first notification. Reports count explicit decisions/interventions and submitted handoffs without inferring productivity or review quality. A Pi session importer deduplicates measured assistant usage, rejects ambiguous attribution, and reports incomplete coverage; unknown usage/cost remains unknown.
