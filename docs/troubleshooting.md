@@ -70,7 +70,7 @@ Startup failures after native checking begins create `session_startup_failed` ta
 
 ## Updating the toolbox
 
-Copy toolkit changes selectively; preserve factory definitions, recipes, role configuration, local overlays, and task history. `make update` updates dependencies, not your toolbox checkout or customizations. Changes to authored configuration apply to new prepared sessions; existing runtime copies remain separate until native controls or a new session apply the changes. An already running role does not gain a new MCP merely because its source JSON was edited.
+Use the [preview-first toolkit updater](toolkit-updates.md) to preserve factory definitions, local overrides and task history. Existing copies should establish their baseline before updating the source checkout. `make update` updates dependencies, not your toolbox checkout or customizations. Changes to authored configuration apply to new prepared sessions; existing runtime copies remain separate until native controls or a new session apply the changes. An already running role does not gain a new MCP merely because its source JSON was edited.
 
 When changing a role's skill list, retain the desired existing entries: wrapper overlays replace the entire list. Native JSON overlays merge object keys recursively but replace arrays and scalar values. The same replacement rule applies to a native `packages` array. Details and examples live in [session configuration](../orchestrator/README.md).
 

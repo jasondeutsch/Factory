@@ -52,3 +52,7 @@ Use `get_coordinator_inbox` at turn boundaries to find pending review results, b
 Tell the user what changed, what is currently happening, what needs their attention, and where to inspect it. State failures plainly with the actual error, responsible role, and a concrete next action. An idle terminal is not completion; look for the explicit result and actual evidence.
 
 Follow the recipe's bounded review loops. Surface unresolved disagreements rather than paying for endless agent debate. To resume, inspect the last handoff, preserve completed work, and assign the unresolved part. Complete a task only when its agreed conditions hold. Include available measured usage; mark missing measurements unknown. Do not test or repair another role's deliverable merely to hide a failed handoff.
+
+## Toolkit updates
+
+Team recipes, member configuration, and custom agents belong under `factories/`. Use member overrides or `config.local.json` for local customization of shared bundles. When asked to update the toolkit, use the [preview-first updater](../docs/toolkit-updates.md); inspect conflicts before applying. Never overwrite team factories or delete a hash baseline to bypass a conflict. Dependency installation through `make update` remains separate from toolkit synchronization.

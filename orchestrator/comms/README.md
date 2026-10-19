@@ -134,7 +134,7 @@ The `usage` object requires `provider`, `model`, and `source` (`runtime`, `provi
 
 Normalize input tokens to include cached input. Cache read/write counts are subsets, not values added to the total. Output includes reasoning tokens when already included by the provider; do not add them twice. Omit unknown measurements rather than supplying zero. One `request_key` identifies one model-request measurement, not a cumulative session total. If a provider only reports cumulative usage, its collector must avoid counting overlapping totals.
 
-The service does not intercept agent sessions or provider calls. Reliable automatic usage requires a runtime hook or importer that submits these records; none is bundled yet. Declared provenance is displayed but not independently verified.
+The service does not intercept agent sessions or provider calls. Reliable automatic usage requires a runtime hook; none is bundled. The explicit Pi importer below can submit measured assistant usage from a supported session file. Declared provenance is displayed but not independently verified.
 
 The HTML report includes task participant registrations, assignment ownership/state/result evidence, failed-result counts, current task state, recorded failures and messages, observed stage order, stage/attempt token graphs, models, cost, coverage, and structured evidence. It updates when the URL is fetched; it does not push changes into an open page. Save it for a point-in-time snapshot. With no stage or usage records, those sections explicitly show that information is missing.
 

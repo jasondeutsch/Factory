@@ -10,3 +10,6 @@ __pycache__/
 **/pi/git/
 **/pi/npm/
 **/pi/node_modules/
+
+# Copy-update lock is local; keep .toolkit.json for its baseline.
+.toolkit.lock

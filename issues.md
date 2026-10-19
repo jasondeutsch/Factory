@@ -179,3 +179,9 @@ Task-wide recorded timing separates assignment acceptance, closed blocked interv
 **Status:** Implemented
 
 An explicit recovery plan precedes owner-only cancellation or atomic reassignment to a real replacement participant. Version checks and stable request keys prevent duplicate work. Prior evidence and summary survive; reassignment requires operator confirmation that the old process stopped, never inferred from contact expiry.
+
+## FACT-013 — Toolkit updates without overwriting team factories
+
+**Status:** Implemented
+
+A preview-first copy updater records managed file hashes and refuses conflicting upstream/local edits. Team factories are seeded once, then remain team-owned. Local overrides, task/runtime data and credentials are excluded. No upstream directory, registry, dependency resolver or package ecosystem is introduced.

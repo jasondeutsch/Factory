@@ -81,3 +81,5 @@ This is an agent-driven process, not a workflow execution engine or enforced san
 - [Ralph integration](orchestrator/references/ralph.md): bounded iteration and recovery limits.
 
 For reliable coordinator handoffs, see [dispatch and recovery](orchestrator/references/dispatch.md). For infrastructure evidence and the separate live acceptance run, see [coordination verification](orchestrator/tests/README.md).
+
+Install or update a project copy with the [toolkit updater](docs/toolkit-updates.md). Team-owned `factories/` stays separate from maintained orchestration/resources; updates preview changes and stop on conflicting edits.
