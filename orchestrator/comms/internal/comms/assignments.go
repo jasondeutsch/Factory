@@ -9,6 +9,9 @@ import (
 )
 
 func (s *Store) CreateAssignment(ctx context.Context, input CreateAssignmentInput) (Assignment, error) {
+	if err := validateHandoff(input.Handoff); err != nil {
+		return Assignment{}, err
+	}
 	if err := required("assigning_participant_id", input.AssigningParticipant, "assignee_id", input.Assignee, "title", input.Title, "instructions", input.Instructions, "stage", input.Stage); err != nil {
 		return Assignment{}, err
 	}
@@ -47,6 +50,10 @@ func (s *Store) CreateAssignment(ctx context.Context, input CreateAssignmentInpu
 		expected, _ := json.Marshal(input.ExpectedOutput)
 		_, err = tx.ExecContext(ctx, "INSERT INTO assignments(id,task_id,assigning_participant_id,assignee_id,title,instructions,inputs,expected_output,stage,attempt,state,summary,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,'offered',?,1,?,?)", id, input.TaskID, assigner.ID, assignee.ID, input.Title, input.Instructions, string(inputs), string(expected), input.Stage, input.Attempt, input.Title, at, at)
 		if err != nil {
+			return Assignment{}, err
+		}
+		handoff, _ := json.Marshal(input.Handoff)
+		if _, err := tx.ExecContext(ctx, "UPDATE assignments SET handoff=? WHERE id=?", string(handoff), id); err != nil {
 			return Assignment{}, err
 		}
 		assignment, err := assignmentRecord(ctx, tx, input.TaskID, id)
@@ -209,6 +216,9 @@ func (s *Store) SubmitResult(ctx context.Context, input SubmitResultInput) (Assi
 			return assignment, fmt.Errorf("cannot submit a result from assignment state %s", assignment.State)
 		}
 		if err := requireActiveTask(ctx, tx, input.TaskID, false); err != nil {
+			return assignment, err
+		}
+		if err := validateResultEvidence(assignment.Handoff, input.Result); err != nil {
 			return assignment, err
 		}
 		result, err := json.Marshal(input.Result)

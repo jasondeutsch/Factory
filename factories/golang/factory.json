@@ -10,22 +10,40 @@
     {
       "name": "architect",
       "path": "../../resources/agents/architect",
-      "config": {}
+      "config": {},
+      "handoff": {
+        "require_artifacts": true,
+        "require_limitations": true
+      }
     },
     {
       "name": "architecture_reviewer",
       "path": "../../resources/agents/architecture_reviewer",
-      "config": {}
+      "config": {},
+      "handoff": {
+        "require_artifacts": true,
+        "require_limitations": true
+      }
     },
     {
       "name": "coder_golang",
       "path": "agents/coder_golang",
-      "config": {}
+      "config": {},
+      "handoff": {
+        "require_artifacts": true,
+        "require_limitations": true,
+        "require_checks": true
+      }
     },
     {
       "name": "code_reviewer_golang",
       "path": "agents/code_reviewer_golang",
-      "config": {}
+      "config": {},
+      "handoff": {
+        "require_artifacts": true,
+        "require_limitations": true,
+        "require_checks": true
+      }
     }
   ]
 }

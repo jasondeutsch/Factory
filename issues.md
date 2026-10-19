@@ -161,3 +161,9 @@ A read-only auto-refreshing task page and `get_task_status` share the same recor
 **Status:** Implemented
 
 Versioned, explicitly resolved attention items collect decisions, review handoffs and blockers. Dispatch failures and delivery failures are visible without interpreting terminal prose. Human authority and artifact approvals remain explicit; closing an inbox item does not change work state.
+
+## FACT-010 — Structured handoff evidence requirements
+
+**Status:** Implemented
+
+Assignments retain explicit artifact/check/limitation requirements. Factory members provide defaults for dispatch; each assignment can override them. Incomplete successful submissions are rejected before publishing, while failures can explain missing evidence. Completeness validation does not execute checks or make review judgments.

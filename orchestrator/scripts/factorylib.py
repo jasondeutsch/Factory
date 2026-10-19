@@ -107,6 +107,15 @@ def factory_definition(name: str) -> dict:
         if role in names:
             raise ValueError(f"{path}: duplicate agent name: {role}")
         names.add(role)
+        handoff = member.get("handoff", {})
+        if not isinstance(handoff, dict) or set(handoff) - {"require_artifacts", "require_checks", "require_limitations", "artifacts", "checks"}:
+            raise ValueError(f"{path}: agent {role} has invalid handoff requirements")
+        for key in ("require_artifacts", "require_checks", "require_limitations"):
+            if key in handoff and type(handoff[key]) is not bool:
+                raise ValueError(f"{path}: {key} must be boolean")
+        for key in ("artifacts", "checks"):
+            if key in handoff and (not isinstance(handoff[key], list) or any(not isinstance(v, str) or not v.strip() for v in handoff[key])):
+                raise ValueError(f"{path}: {key} must list nonempty references")
         overrides = member.get("config", {})
         if not isinstance(overrides, dict):
             raise ValueError(f"{path}: agent {role} config must be an object")

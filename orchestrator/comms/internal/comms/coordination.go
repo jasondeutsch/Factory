@@ -13,7 +13,7 @@ type databaseReader interface {
 }
 
 const participantColumns = "id,task_id,instance_id,role,routing_identity,session_ref,registered_at,retired_at"
-const assignmentColumns = "id,task_id,assigning_participant_id,assignee_id,title,instructions,inputs,expected_output,stage,attempt,state,summary,version,created_at,updated_at,result"
+const assignmentColumns = "id,task_id,assigning_participant_id,assignee_id,title,instructions,inputs,expected_output,stage,attempt,state,summary,version,created_at,updated_at,result,handoff"
 
 func scanParticipant(row scanner) (Participant, error) {
 	var participant Participant
@@ -38,9 +38,9 @@ func activeParticipant(ctx context.Context, reader databaseReader, taskID, id st
 
 func scanAssignment(row scanner) (Assignment, error) {
 	var assignment Assignment
-	var inputs, expected string
+	var inputs, expected, handoff string
 	var result sql.NullString
-	err := row.Scan(&assignment.ID, &assignment.TaskID, &assignment.AssigningParticipant, &assignment.Assignee, &assignment.Title, &assignment.Instructions, &inputs, &expected, &assignment.Stage, &assignment.Attempt, &assignment.State, &assignment.Summary, &assignment.Version, &assignment.CreatedAt, &assignment.UpdatedAt, &result)
+	err := row.Scan(&assignment.ID, &assignment.TaskID, &assignment.AssigningParticipant, &assignment.Assignee, &assignment.Title, &assignment.Instructions, &inputs, &expected, &assignment.Stage, &assignment.Attempt, &assignment.State, &assignment.Summary, &assignment.Version, &assignment.CreatedAt, &assignment.UpdatedAt, &result, &handoff)
 	if errors.Is(err, sql.ErrNoRows) {
 		return assignment, errors.New("assignment not found in this task")
 	}
@@ -51,6 +51,9 @@ func scanAssignment(row scanner) (Assignment, error) {
 		return assignment, err
 	}
 	if err := json.Unmarshal([]byte(expected), &assignment.ExpectedOutput); err != nil {
+		return assignment, err
+	}
+	if err := json.Unmarshal([]byte(handoff), &assignment.Handoff); err != nil {
 		return assignment, err
 	}
 	if result.Valid {

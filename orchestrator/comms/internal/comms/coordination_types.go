@@ -41,25 +41,27 @@ type BindParticipantInput struct {
 }
 
 type Assignment struct {
-	ID                   string            `json:"id"`
-	TaskID               string            `json:"task_id"`
-	AssigningParticipant string            `json:"assigning_participant_id"`
-	Assignee             string            `json:"assignee_id"`
-	Title                string            `json:"title"`
-	Instructions         string            `json:"instructions"`
-	Inputs               []string          `json:"inputs"`
-	ExpectedOutput       []string          `json:"expected_output"`
-	Stage                string            `json:"stage"`
-	Attempt              int               `json:"attempt"`
-	State                string            `json:"state"`
-	Summary              string            `json:"summary"`
-	Version              int64             `json:"version"`
-	CreatedAt            string            `json:"created_at"`
-	UpdatedAt            string            `json:"updated_at"`
-	Result               *AssignmentResult `json:"result,omitempty"`
+	Handoff              HandoffRequirements `json:"handoff"`
+	ID                   string              `json:"id"`
+	TaskID               string              `json:"task_id"`
+	AssigningParticipant string              `json:"assigning_participant_id"`
+	Assignee             string              `json:"assignee_id"`
+	Title                string              `json:"title"`
+	Instructions         string              `json:"instructions"`
+	Inputs               []string            `json:"inputs"`
+	ExpectedOutput       []string            `json:"expected_output"`
+	Stage                string              `json:"stage"`
+	Attempt              int                 `json:"attempt"`
+	State                string              `json:"state"`
+	Summary              string              `json:"summary"`
+	Version              int64               `json:"version"`
+	CreatedAt            string              `json:"created_at"`
+	UpdatedAt            string              `json:"updated_at"`
+	Result               *AssignmentResult   `json:"result,omitempty"`
 }
 
 type CheckEvidence struct {
+	Name       string `json:"name,omitempty"`
 	Command    string `json:"command"`
 	ExitStatus int    `json:"exit_status"`
 	OutputRef  string `json:"output_ref,omitempty"`
@@ -71,21 +73,22 @@ type AssignmentResult struct {
 	Summary     string          `json:"summary"`
 	Artifacts   []string        `json:"artifacts,omitempty"`
 	Checks      []CheckEvidence `json:"checks,omitempty"`
-	Limitations []string        `json:"limitations,omitempty"`
+	Limitations []string        `json:"limitations"`
 	NextAction  string          `json:"next_action"`
 }
 
 type CreateAssignmentInput struct {
-	TaskID               string   `json:"task_id"`
-	AssigningParticipant string   `json:"assigning_participant_id"`
-	Assignee             string   `json:"assignee_id"`
-	Title                string   `json:"title"`
-	Instructions         string   `json:"instructions"`
-	Inputs               []string `json:"inputs,omitempty"`
-	ExpectedOutput       []string `json:"expected_output"`
-	Stage                string   `json:"stage"`
-	Attempt              int      `json:"attempt"`
-	RequestKey           string   `json:"request_key"`
+	Handoff              HandoffRequirements `json:"handoff,omitempty"`
+	TaskID               string              `json:"task_id"`
+	AssigningParticipant string              `json:"assigning_participant_id"`
+	Assignee             string              `json:"assignee_id"`
+	Title                string              `json:"title"`
+	Instructions         string              `json:"instructions"`
+	Inputs               []string            `json:"inputs,omitempty"`
+	ExpectedOutput       []string            `json:"expected_output"`
+	Stage                string              `json:"stage"`
+	Attempt              int                 `json:"attempt"`
+	RequestKey           string              `json:"request_key"`
 }
 
 type AssignmentInput struct {

@@ -48,9 +48,9 @@ def dispatch(args):
         raise ValueError("dispatch must run inside a Herdr pane; do not override HERDR_ENV")
     task, metadata = read_task(args.task)
     request = json.loads(Path(args.request).read_text())
-    fields = {"role", "title", "instructions", "inputs", "expected_output", "stage", "attempt"}
-    if not isinstance(request, dict) or set(request) - fields or not fields - {"inputs"} <= request.keys():
-        raise ValueError("request requires role, title, instructions, expected_output, stage, attempt; inputs is optional")
+    fields = {"role", "title", "instructions", "inputs", "expected_output", "stage", "attempt", "handoff"}
+    if not isinstance(request, dict) or set(request) - fields or not fields - {"inputs", "handoff"} <= request.keys():
+        raise ValueError("request requires role, title, instructions, expected_output, stage, attempt; inputs and handoff are optional")
     if any(not isinstance(request[key], str) or not request[key].strip() for key in ("role", "title", "instructions", "stage")):
         raise ValueError("role, title, instructions and stage must be nonempty strings")
     if type(request["attempt"]) is not int or request["attempt"] < 1:
@@ -62,6 +62,11 @@ def dispatch(args):
     members = factory_definition(metadata["factory"])["agents"]
     if request["role"] not in [member["name"] for member in members]:
         raise ValueError("role is not a member of this task's factory")
+    if "handoff" not in request:
+        member = next(member for member in members if member["name"] == request["role"])
+        request["handoff"] = member.get("handoff", {})
+    if not isinstance(request["handoff"], dict):
+        raise ValueError("handoff must be an object")
     client = Client()
     record = remote_task(metadata, client)
     if record["status"] in ("cancelled", "complete"):

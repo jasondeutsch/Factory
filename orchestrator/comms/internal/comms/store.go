@@ -56,8 +56,8 @@ func Open(path string) (*Store, error) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return failed(err)
 	}
-	if version > 6 {
-		return failed(fmt.Errorf("database schema %d is newer than supported schema 6", version))
+	if version > 7 {
+		return failed(fmt.Errorf("database schema %d is newer than supported schema 7", version))
 	}
 	if err := initializeSchema(ctx, db, version); err != nil {
 		return failed(err)
@@ -79,7 +79,12 @@ func initializeSchema(ctx context.Context, db *sql.DB, version int) error {
 			return fmt.Errorf("upgrade messages: %w", err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=6"); err != nil {
+	if version < 7 {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE assignments ADD COLUMN handoff TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version=7"); err != nil {
 		return err
 	}
 	return tx.Commit()

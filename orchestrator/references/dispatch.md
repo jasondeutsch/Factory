@@ -42,3 +42,9 @@ Repeat the same command with the same `--key` and unchanged assignment. Receipts
 For an already running instance, pass both `--reuse-participant <id>` and `--agent <actual-name>`. Its recorded binding must already match the live session. Bind it explicitly with `bind_participant` first if needed. A live name alone is not proof of identity.
 
 For manual or unsupported hosts, use the [session launcher](../README.md) and comms assignment tools directly. The service itself cannot operate host panes. Deterministic fixtures cover retries and failure boundaries; real Herdr acceptance remains a separate [live eval](../tests/README.md).
+
+## Handoff evidence
+
+Each factory member may declare `handoff` defaults next to its name/path/config. Dispatch copies these into the assignment unless its request explicitly supplies its own `handoff`. Changes after assignment creation do not weaken existing requirements. Supported fields are `require_artifacts`, `require_checks`, `require_limitations`, `artifacts` (exact required references), and `checks` (required `check.name` values). Direct MCP callers supply the same object to `create_assignment`.
+
+Submission checks the evidence shape before writing a result or notifying the owner. An empty limitations array explicitly means none known. Failed results can omit otherwise-required evidence but must explain the limitation; they are not successful gate completion. Check exit statuses are recorded honestly, including failures. Review judgment and human approvals remain separate.
