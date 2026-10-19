@@ -32,11 +32,10 @@ Set each needed member's `config.provider` and `config.model` in factory.json an
 From the application root, select the factory whose coordinator settings should apply:
 
 ```bash
-docker-compose -f .factory/orchestrator/comms/compose.yaml up --build -d
 .factory/orchestrator/start.sh --factory golang
 ```
 
-Run inside Herdr for visible pane management. The services remain running after the coordinator exits. No task or worker starts automatically. `make -C .factory start` is the shortcut for an unselected coordinator using its bootstrap bundle settings; it does not select a factory or apply member overrides.
+The entrypoint starts local Compose services and waits for MCP connectivity. Set `FACTORY_COMMS_URL` to use an existing service without managing Compose. Run inside Herdr for visible panes and a supervised delivery bridge; outside Herdr it explicitly reports that inbox polling is required. The bridge stops when the coordinator exits; Compose services remain running. No task or worker starts automatically. `make -C .factory start` is the shortcut for an unselected coordinator using its bootstrap bundle settings; it does not select a factory or apply member overrides.
 
 You can also use an existing agent as coordinator: read `.factory/orchestrator/SKILL.md`, connect its native MCP client to `http://127.0.0.1:8090/mcp`, and reload it. Reading a skill alone does not register tools. The supplied worker profiles already declare this connection.
 

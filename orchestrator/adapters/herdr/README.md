@@ -42,7 +42,7 @@ The core toolbox neither installs this extension nor assumes all runners support
 
 ## Automatic inbox delivery
 
-Use the [delivery bridge setup](../../comms/delivery.md) to capture each live named session as structured `session_ref` and attach it to its existing participant with `bind_participant`. Start its host process in a separate Herdr pane and register the coordinator too. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
+Use the [delivery bridge setup](../../comms/delivery.md) to capture each live named session as structured `session_ref` and attach it to its existing participant with `bind_participant`. The supplied coordinator entrypoint already supervises a project bridge inside Herdr. For an existing external coordinator, start the bridge separately. Register and bind the coordinator too; process startup alone does not create a task binding. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
 
 ## One-shot inbox notification
 

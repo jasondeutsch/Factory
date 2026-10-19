@@ -15,5 +15,4 @@ update:
 	cd orchestrator/comms && go mod download
 
 start:
-	docker-compose -f orchestrator/comms/compose.yaml up --build -d
 	./orchestrator/start.sh

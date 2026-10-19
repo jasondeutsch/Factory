@@ -185,3 +185,9 @@ An explicit recovery plan precedes owner-only cancellation or atomic reassignmen
 **Status:** Implemented
 
 A preview-first copy updater records managed file hashes and refuses conflicting upstream/local edits. Team factories are seeded once, then remain team-owned. Local overrides, task/runtime data and credentials are excluded. No upstream directory, registry, dependency resolver or package ecosystem is introduced.
+
+## FACT-014 — Coordinated startup
+
+**Status:** Implemented; live Herdr acceptance pending
+
+The coordinator entrypoint validates configuration, starts local Compose or connects to an explicit endpoint, waits for MCP connectivity, and supervises a project delivery bridge inside Herdr. Check-only modes remain free of service startup. Exiting cleans up the owned bridge, not shared services. Startup distinguishes service connectivity from task identity, pane binding and delivery readiness; an unassigned coordinator still establishes those through the existing task/binding protocol. Outside Herdr, manual inbox polling is explicit.

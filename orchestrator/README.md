@@ -163,7 +163,7 @@ Add stdio commands or HTTP URLs, credential environment references, and tool exp
 
 ### Shared communications
 
-All roles have the `comms` native MCP entry. The launcher uses `FACTORY_COMMS_URL` (default `http://127.0.0.1:8090/mcp`) for both helpers and prepared Pi profiles, and adds a `Bearer ${COMMS_AUTH_TOKEN}` header reference when the shared token is set. These settings and session identity cannot be remapped per role. Start the service through its [Compose setup](comms/README.md) before creating tasks or starting sessions.
+All roles have the `comms` native MCP entry. The launcher uses `FACTORY_COMMS_URL` (default `http://127.0.0.1:8090/mcp`) for both helpers and prepared Pi profiles, and adds a `Bearer ${COMMS_AUTH_TOKEN}` header reference when the shared token is set. These settings and session identity cannot be remapped per role. The coordinator entrypoint starts the local [Compose setup](comms/README.md) automatically. With an explicit `FACTORY_COMMS_URL`, it connects to that service instead. Direct worker launches and check-only commands require the service to be running already.
 
 The shared skill lives in [comms/skills/task-comms](comms/skills/task-comms/SKILL.md); each role configuration references it directly rather than copying it. It describes tasks, inboxes, handoffs, decisions, evidence, usage, and reports. The launcher supplies the project, role, task ID, and local document directory in instructions and environment. Comms holds authoritative state; local task files hold documents and a service link.
 
@@ -258,3 +258,13 @@ For a single explicit handoff inside Herdr, use the [dispatch operation](referen
 Task-bound launches publish an immutable public session snapshot to comms after registration. `get_session` exposes selected runner/model/thinking, MCP names, instruction/skill hashes, and startup-check status. The fingerprint covers these public selections and native tool selection; it does not fingerprint credential values, all native provider options, or environment contents. Compare the recorded skill hashes with current source to identify changed instructions; editing source does not update a running session.
 
 The bound delivery bridge samples host contact, including empty inboxes. Contact expires to `unknown` after 30 seconds. `working` means Herdr observed activity, not that an assignment progressed. Startup failures remain task events; absence of a snapshot or stale contact is never evidence of completion.
+
+## Coordinated startup
+
+`.factory/orchestrator/start.sh --factory golang` validates the launch configuration, starts local Compose services, waits for MCP connectivity, and launches the coordinator with its existing native checks. Both `docker compose` and `docker-compose` are supported, without requiring `--wait`. `COMMS_PORT` selects the local service port; an explicit `FACTORY_COMMS_URL` disables Compose management entirely. Compose and dependency builds may need network access.
+
+Inside Herdr, startup builds and supervises one project-scoped delivery bridge. Its private diagnostic log stays under `FACTORY_RUNTIME_DIR` (default `~/.factory/runtime`). Coordinator exit stops its bridge; unexpected bridge exit stops the coordinator with an actionable error. Temporary bridge binaries are removed. Compose stays running so other sessions can continue. The bridge reconnects after service interruptions; consult its log and task delivery state when notifications stall.
+
+Outside Herdr, startup explicitly reports that automatic notifications are unavailable. The coordinator must poll comms. A running bridge does not prove recipient readiness: task registration and an actual pane binding are still required, using the existing [Herdr binding procedure](adapters/herdr/README.md). An unassigned launch has no task participant to bind. No task, worker, or approval is invented at startup.
+
+`--check`, `--check-factory`, `--dry-run`, and `--help` never start services or a delivery bridge. `session.py` remains the lower-level launcher for callers that manage dependencies themselves. Live Herdr acceptance verification remains pending; automated startup tests exercise supervision and dependency boundaries with fixtures.
