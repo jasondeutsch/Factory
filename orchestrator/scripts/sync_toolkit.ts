@@ -20,7 +20,7 @@ const roots = new Set([
   "package-lock.json",
   "tsconfig.json",
 ]);
-const managed = new Set(["orchestrator", "resources", "docs"]);
+const managed = new Set(["orchestrator", "docs"]);
 const excluded = new Set([
   ".git",
   "node_modules",
@@ -44,25 +44,18 @@ export const allowed = (name: string) =>
   !name.split(path.sep).includes("..") &&
   safe(name) &&
   (managed.has(name.split(path.sep)[0]) || roots.has(name));
-function files(
-  source: string,
-  includeFactories = false,
-  prefix = "",
-): Map<string, string> {
+function files(source: string, prefix = ""): Map<string, string> {
   const result = new Map<string, string>();
   for (const entry of fs.readdirSync(path.join(source, prefix), {
     withFileTypes: true,
   })) {
     const ref = path.join(prefix, entry.name);
     if (!safe(ref)) continue;
-    const included =
-      allowed(ref) ||
-      (includeFactories && ref.split(path.sep)[0] === "factories");
+    const included = allowed(ref);
     if (entry.isSymbolicLink() && included)
       throw new Error(`Source symlink: ${ref}`);
     if (entry.isDirectory()) {
-      for (const [key, value] of files(source, includeFactories, ref))
-        result.set(key, value);
+      for (const [key, value] of files(source, ref)) result.set(key, value);
     } else if (entry.isFile() && included)
       result.set(ref, path.join(source, ref));
   }
@@ -111,13 +104,17 @@ export function plan(source: string, target: string) {
     throw new Error("Invalid .toolkit.json");
   for (const [name, value] of Object.entries(manifest.files))
     if (
-      !allowed(name) ||
+      path.isAbsolute(name) ||
+      name.split(path.sep).includes("..") ||
+      !safe(name) ||
       typeof value !== "string" ||
       !/^[a-f0-9]{64}$/.test(value)
     )
       throw new Error("Invalid baseline");
   const incoming = files(source),
-    updated = { ...manifest.files },
+    updated = Object.fromEntries(
+      Object.entries(manifest.files).filter(([name]) => allowed(name)),
+    ),
     actions: { path: string; action: string }[] = [],
     conflicts: string[] = [],
     preserved: string[] = [];
@@ -156,7 +153,7 @@ export async function synchronize(
   if (!fs.existsSync(path.join(source, "orchestrator/session.ts")))
     throw new Error("Source is not a complete toolkit");
   if (!fs.existsSync(target)) {
-    const incoming = files(source, true);
+    const incoming = files(source);
     if (apply) {
       if (!fs.existsSync(path.dirname(target)))
         throw new Error("Project directory must exist");

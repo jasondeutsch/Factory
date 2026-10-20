@@ -6,9 +6,10 @@ import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { once } from "node:events";
 import { ROOT, sleep } from "../lib/core.ts";
+import { seedConfigurations } from "./configuration-fixture.ts";
 import { Comms } from "../lib/client.ts";
 export const execute = promisify(execFile);
-export async function fixture() {
+export async function fixture(contentRoot?: string) {
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "factory-test-")),
   );
@@ -20,6 +21,14 @@ export async function fixture() {
     filter: (source) =>
       !["node_modules", ".git", "__pycache__"].includes(path.basename(source)),
   });
+  if (contentRoot) {
+    for (const directory of ["factories", "agents", "skills"])
+      fs.cpSync(
+        path.join(contentRoot, directory),
+        path.join(toolkit, directory),
+        { recursive: true },
+      );
+  } else seedConfigurations(toolkit);
   fs.symlinkSync(
     path.join(ROOT, "node_modules"),
     path.join(toolkit, "node_modules"),

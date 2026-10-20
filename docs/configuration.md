@@ -2,7 +2,7 @@
 
 **Edit one file: `factories/<name>/factory.json`.** It declares the members, execution defaults, provider endpoints, MCP servers, extensions, and skill selections. Agent directories contain instructions, skills, scripts, and a thin `start.sh`; they contain no independent execution configuration.
 
-See the complete [Go factory](golang/factory.json) and [writing factory](writing/factory.json). Both contain illustrative gateway settings that you must replace before launch.
+Factory configurations are supplied by your team or a separate tools repository. The framework does not ship any runnable factories. Paths below refer to the combined project `.factory/` installation.
 
 ## Shared defaults and member overrides
 
@@ -21,6 +21,7 @@ Member `skills`, `mcps`, and `extensions` select resources. If omitted, their de
 | `providers` | Named custom provider definitions in Pi's native provider format. Built-in providers need no entry. |
 | `mcps` | Named native MCP server definitions. Declaring one does not enable it for every agent. |
 | `extensions` | Named Pi package sources or package objects. Only selected packages are installed/loaded. The local Factory delivery extension is always loaded for Pi. |
+| `artifacts` | Optional mapping of output HTML filenames to template paths relative to this factory file. Empty/omitted means no starter documents. |
 | `agents` | Members, paths, selections, overrides, and optional handoff requirements. |
 
 | Member field | Meaning |
@@ -50,6 +51,7 @@ These belong in `defaults` or a member's `config`:
 | `auth_file_env`, `mcp_auth_file_env` | Environment variables containing absolute private native authentication-file paths. |
 | `args` | Additional permitted Pi flags. Cannot override model, tools, credentials, session ownership, or interactivity. |
 | `pi.settings` | Additional native settings, such as retry policy. Use the explicit fields above for model/tools and `extensions` for packages. |
+| `loop` | Optional Pi loop launch settings: `prompt`, `approval_artifacts`, and `commands`; described below. |
 | `command` | Command runner argv, including `{instructions_file}`. See [other runners](../orchestrator/README.md#other-runners). |
 
 ## Providers and credentials
@@ -62,9 +64,7 @@ Different members may select different providers and models. Only the selected c
 
 ## MCPs, skills, and extensions
 
-The Go factory defines `gopls` once and selects it for the coder and reviewer. `linear` is defined but unselected. To enable Linear for the architect, set its `mcps` to `["comms", "linear"]`, provide `LINEAR_API_KEY`, and start a new session. No native MCP file needs editing.
-
-The Go factory defines the pinned Ralph package once in `extensions.ralph`; only the coder selects `"extensions": ["ralph"]`. An absolute path to an existing package checkout can replace its source for offline use. Extension installation requires network access unless the package is already available locally. Factory dependency targets check/install selected packages in private generated profiles; each fresh agent profile may still need to obtain its own package copy.
+Define MCP servers once in `mcps`, then select them by name on each member. Define Pi extension packages once in `extensions`; selection controls which profiles load them. The framework adds its local delivery extension for every Pi session. Model/provider choices, skills, third-party tools and extension sources belong to your configuration, not the framework.
 
 Skills are explicit file selections. `session.ts` reads the full selected `SKILL.md` entrypoints into the agent's system instructions, preserving source paths for supporting references. A skill does not install tools or register an MCP server.
 
@@ -75,9 +75,9 @@ Comms is shared infrastructure: `FACTORY_COMMS_URL` and `COMMS_AUTH_TOKEN` are t
 From an application containing `.factory/`:
 
 ```bash
-.factory/orchestrator/start.sh --factory golang
-.factory/resources/agents/architect/start.sh --factory golang --dry-run
-.factory/factories/golang/agents/coder_golang/start.sh <task-directory>
+.factory/orchestrator/start.sh --factory team
+node .factory/orchestrator/session.ts architect --factory team --dry-run
+node .factory/orchestrator/session.ts builder <task-directory>
 ```
 
 `--factory` is required unless an explicit task selects its recorded factory. There is no global coordinator profile or automatic newest-task selection. A conflicting factory/task pair fails.
@@ -88,6 +88,31 @@ See [how the configuration reaches Pi](../orchestrator/README.md#how-configurati
 
 ## Dependencies and customization
 
-Each factory owns a simple Makefile with `install` and `update`. These call shared prerequisites, then add factory-specific tools. No installer schema or package ecosystem is introduced. Install affects the host, not an isolated toolchain.
+A team may provide a Makefile with `install` and `update` for its tools. The framework Makefile installs shared runtime dependencies only. No installer schema or package ecosystem is introduced. Install affects the host, not an isolated toolchain.
 
-Edit the recipe in `README.md` for workflow agreements and `factory.json` for execution. Team-owned factories survive [toolkit updates](../docs/toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
+Edit the recipe in `README.md` for workflow agreements and `factory.json` for execution. Team-owned factories survive [toolkit updates](toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
+
+## Task document templates
+
+```json
+"artifacts": {
+  "design.html": "templates/design.html",
+  "plan.html": "templates/plan.html"
+}
+```
+
+`task.ts attach` creates these documents once. Templates support `$title`, `$brief`, `${title}`, `${brief}`, and `$$` for a literal dollar sign; inserted values are HTML-escaped. Output names must be plain HTML filenames, and templates must resolve to files inside `.factory/`. Task pointers and the reviews directory are framework bookkeeping. Reattaching preserves existing document content. A factory with no artifacts gets no spec or plan implicitly.
+
+## Optional Pi loop launch
+
+A member may set this in `config` (or inherit it from `defaults`):
+
+```json
+"loop": {
+  "prompt": "/my-loop --iterations={iterations} Work on the assigned task at {task_dir}.",
+  "approval_artifacts": ["design.html", "plan.html"],
+  "commands": ["my-loop"]
+}
+```
+
+`--loop N` requires an explicit task, a Pi runner, positive iterations, configured loop settings, and current hash-matching approval of every listed artifact. Those artifacts must exist in the factory's `artifacts` map. The launcher checks the named native commands and waits for an assignment before starting; it substitutes `{iterations}` and `{task_dir}` in the prompt. The selected extension defines actual iteration behavior. No factory or member name activates a loop automatically. This is a launch guard, not a workflow scheduler or a continuous approval monitor.

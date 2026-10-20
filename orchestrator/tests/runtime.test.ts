@@ -20,7 +20,7 @@ test("task attachment is idempotent, preserves documents and records exact appro
   const created = await f.cli("orchestrator/scripts/task.ts", [
     "new",
     "--factory",
-    "golang",
+    "sample",
     "--name",
     "Hello <Go>",
     "--brief",
@@ -42,7 +42,7 @@ test("task attachment is idempotent, preserves documents and records exact appro
         "attach",
         metadata.comms_id,
         "--factory",
-        "golang",
+        "sample",
       ]),
     ),
   );
@@ -70,7 +70,7 @@ test("task attachment is idempotent, preserves documents and records exact appro
   const preview = JSON.parse(
     (
       await f.cli("orchestrator/session.ts", [
-        "architect",
+        "designer",
         directory,
         "--dry-run",
       ])
@@ -79,18 +79,16 @@ test("task attachment is idempotent, preserves documents and records exact appro
   assert.equal(preview.cwd, f.project);
   assert.equal(preview.manifest.delivery, "native");
   assert.ok(
-    preview.skills.some((s: string) =>
-      s.endsWith("software-architecture/SKILL.md"),
-    ),
+    preview.skills.some((s: string) => s.endsWith("fixture-design/SKILL.md")),
   );
   assert.equal(preview.runner_configuration.thinking, "high");
   assert.ok(!fs.existsSync(f.env.FACTORY_RUNTIME_DIR));
   await assert.rejects(
     f.cli("orchestrator/session.ts", [
-      "architect",
+      "designer",
       directory,
       "--factory",
-      "writing",
+      "minimal",
       "--dry-run",
     ]),
     /conflicts/,
@@ -125,7 +123,7 @@ test("configuration merges member overrides and only materializes selected resou
   assert.ok(!JSON.stringify(profile.files).includes("do-not-materialize"));
 });
 test("invalid configuration is rejected before launching a process", async () => {
-  const file = path.join(f.toolkit, "factories/writing/factory.json"),
+  const file = path.join(f.toolkit, "factories/minimal/factory.json"),
     original = fs.readFileSync(file);
   try {
     const config = json(file);
@@ -133,9 +131,9 @@ test("invalid configuration is rejected before launching a process", async () =>
     writeJSON(file, config);
     await assert.rejects(
       f.cli("orchestrator/session.ts", [
-        "pair_writer",
+        "writer",
         "--factory",
-        "writing",
+        "minimal",
         "--dry-run",
       ]),
       /must not override/,
@@ -195,7 +193,16 @@ test("toolkit updates preserve factories and refuse conflicting local edits", as
   fs.writeFileSync(path.join(source, "orchestrator/session.ts"), "first");
   fs.writeFileSync(path.join(source, "factories/custom.json"), "custom");
   await synchronize(source, target, true);
+  assert.ok(!fs.existsSync(path.join(target, "factories")));
+  fs.mkdirSync(path.join(target, "factories"));
   fs.writeFileSync(path.join(target, "factories/custom.json"), "user");
+  for (const directory of ["agents", "skills", "resources"]) {
+    fs.mkdirSync(path.join(target, directory));
+    fs.writeFileSync(path.join(target, directory, "custom.md"), "user");
+  }
+  const baseline = json(path.join(target, ".toolkit.json"));
+  baseline.files["resources/custom.md"] = hash("user");
+  writeJSON(path.join(target, ".toolkit.json"), baseline);
   fs.writeFileSync(path.join(source, "orchestrator/session.ts"), "second");
   await synchronize(source, target, true);
   assert.equal(
@@ -206,6 +213,11 @@ test("toolkit updates preserve factories and refuse conflicting local edits", as
     fs.readFileSync(path.join(target, "factories/custom.json"), "utf8"),
     "user",
   );
+  for (const directory of ["agents", "skills", "resources"])
+    assert.equal(
+      fs.readFileSync(path.join(target, directory, "custom.md"), "utf8"),
+      "user",
+    );
   fs.writeFileSync(path.join(target, "orchestrator/session.ts"), "local");
   fs.writeFileSync(path.join(source, "orchestrator/session.ts"), "third");
   const report = await synchronize(source, target, true);
@@ -219,7 +231,7 @@ test(
   "installed Pi loads the delivery extension in RPC without model inference",
   { skip: !process.env.FACTORY_TEST_PI },
   async () => {
-    const file = path.join(f.toolkit, "factories/writing/factory.json"),
+    const file = path.join(f.toolkit, "factories/minimal/factory.json"),
       original = fs.readFileSync(file);
     try {
       const config = json(file);
@@ -242,7 +254,7 @@ test(
         (
           await f.cli(
             "orchestrator/session.ts",
-            ["pair_writer", "--factory", "writing", "--check"],
+            ["writer", "--factory", "minimal", "--check"],
             { FACTORY_FIXTURE_KEY: "fixture-not-a-secret" },
           )
         ).stdout,
@@ -255,19 +267,19 @@ test(
   },
 );
 
-test("Ralph entry guard requires current spec and plan approvals", async () => {
+test("Configured loop entry guard requires current spec and plan approvals", async () => {
   const directory = (
     await f.cli("orchestrator/scripts/task.ts", [
       "new",
       "--factory",
-      "golang",
+      "sample",
       "--name",
       "Approval guard",
       "--brief",
       "Guard only",
     ])
   ).stdout.trim();
-  const preview = ["coder_golang", directory, "--loop", "2", "--dry-run"];
+  const preview = ["builder", directory, "--loop", "2", "--dry-run"];
   await assert.rejects(f.cli("orchestrator/session.ts", preview), /approval/);
   await f.cli("orchestrator/scripts/task.ts", [
     "decide",
@@ -286,13 +298,13 @@ test("Ralph entry guard requires current spec and plan approvals", async () => {
   assert.ok(
     JSON.parse((await f.cli("orchestrator/session.ts", preview)).stdout)
       .command.at(-1)
-      .includes("/ralph-loop"),
+      .includes("/fixture-loop"),
   );
   fs.appendFileSync(path.join(directory, "plan.html"), "Changed");
   await assert.rejects(f.cli("orchestrator/session.ts", preview), /approval/);
   await assert.rejects(
     f.cli("orchestrator/session.ts", [
-      "architect",
+      "designer",
       directory,
       "--loop",
       "2",
@@ -307,7 +319,7 @@ test("usage importer records a measured request once across retries", async () =
     await f.cli("orchestrator/scripts/task.ts", [
       "new",
       "--factory",
-      "golang",
+      "sample",
       "--name",
       "Usage",
       "--brief",
@@ -399,7 +411,7 @@ test(
     await f.client.call("set_task_factory", {
       task_id: task.id,
       factory: {
-        name: "golang",
+        name: "sample",
         owner: "coordinator",
         agents: [{ name: "coordinator", path: "../../orchestrator" }],
       },
@@ -408,7 +420,7 @@ test(
     const env = {
       ...f.env,
       FACTORY_PROJECT: f.project,
-      FACTORY_NAME: "golang",
+      FACTORY_NAME: "sample",
       FACTORY_ROLE: "coordinator",
       FACTORY_TASK_ID: task.id,
       FACTORY_INSTANCE_ID: "native-fixture",
@@ -492,7 +504,7 @@ test(
 );
 
 test("all declared members load their selected instructions and skills", async () => {
-  for (const factory of ["golang", "writing"])
+  for (const factory of ["sample", "minimal"])
     for (const member of json(
       path.join(f.toolkit, "factories", factory, "factory.json"),
     ).agents) {
@@ -523,7 +535,7 @@ test("all declared members load their selected instructions and skills", async (
 });
 
 test("invalid member fields and catalog references fail before task creation", async () => {
-  const file = path.join(f.toolkit, "factories/writing/factory.json"),
+  const file = path.join(f.toolkit, "factories/minimal/factory.json"),
     original = fs.readFileSync(file);
   const cases = [
     (c: any) => {
@@ -557,7 +569,7 @@ test("invalid member fields and catalog references fail before task creation", a
         f.cli("orchestrator/scripts/task.ts", [
           "new",
           "--factory",
-          "writing",
+          "minimal",
           "--name",
           "Invalid",
           "--brief",
@@ -625,5 +637,74 @@ test("macOS hosts open an executable command document without copying secrets", 
     }
   } finally {
     process.env.PATH = original;
+  }
+});
+
+test("artifact scaffolding and loop guards follow configuration rather than factory names", async () => {
+  const file = path.join(f.toolkit, "factories/minimal/factory.json"),
+    original = fs.readFileSync(file);
+  try {
+    const config = json(file);
+    fs.mkdirSync(path.join(path.dirname(file), "templates"));
+    fs.writeFileSync(
+      path.join(path.dirname(file), "templates/proposal.html"),
+      "<h1>$title</h1><p>$brief</p>",
+    );
+    config.artifacts = { "proposal.html": "templates/proposal.html" };
+    config.agents.find((m: any) => m.name === "writer").config.loop = {
+      prompt: "/review-loop {iterations} {task_dir}",
+      approval_artifacts: ["proposal.html"],
+      commands: ["review-loop"],
+    };
+    writeJSON(file, config);
+    const directory = (
+      await f.cli("orchestrator/scripts/task.ts", [
+        "new",
+        "--factory",
+        "minimal",
+        "--name",
+        "Configured document",
+        "--brief",
+        "A proposal",
+      ])
+    ).stdout.trim();
+    assert.ok(fs.existsSync(path.join(directory, "proposal.html")));
+    assert.ok(!fs.existsSync(path.join(directory, "spec.html")));
+    await assert.rejects(
+      f.cli("orchestrator/session.ts", [
+        "writer",
+        directory,
+        "--loop",
+        "2",
+        "--dry-run",
+      ]),
+      /approval/,
+    );
+    await f.cli("orchestrator/scripts/task.ts", [
+      "decide",
+      directory,
+      "--by",
+      "human",
+      "--outcome",
+      "approve",
+      "--artifact",
+      "proposal.html",
+      "--text",
+      "Fixture approval",
+    ]);
+    const preview = JSON.parse(
+      (
+        await f.cli("orchestrator/session.ts", [
+          "writer",
+          directory,
+          "--loop",
+          "2",
+          "--dry-run",
+        ])
+      ).stdout,
+    );
+    assert.ok(preview.command.at(-1).startsWith("/review-loop 2 "));
+  } finally {
+    fs.writeFileSync(file, original);
   }
 });

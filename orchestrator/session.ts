@@ -27,6 +27,7 @@ export async function approved(
   client: Comms,
   metadata: RecordValue,
   directory: string,
+  artifacts: string[],
 ) {
   const task = await remoteTask(client, metadata);
   if (["complete", "cancelled"].includes(task.status))
@@ -42,7 +43,7 @@ export async function approved(
       continue;
     const decision = record.data;
     if (!decision.artifacts?.length && decision.outcome !== "approve")
-      for (const name of ["spec.html", "plan.html"])
+      for (const name of artifacts)
         latest[name] = { outcome: decision.outcome };
     for (const artifact of decision.artifacts || [])
       latest[artifact.path] = {
@@ -50,12 +51,12 @@ export async function approved(
         hash: artifact.sha256,
       };
   }
-  for (const name of ["spec.html", "plan.html"])
+  for (const name of artifacts)
     if (
       latest[name]?.outcome !== "approve" ||
       latest[name]?.hash !== hash(fs.readFileSync(path.join(directory, name)))
     )
-      throw new Error(`Ralph requires approval of current ${name}`);
+      throw new Error(`Loop requires approval of current ${name}`);
 }
 export function prepare(
   role: string,
@@ -322,18 +323,23 @@ export async function main(argv = process.argv.slice(2)) {
     if (loop !== undefined) {
       if (
         !task ||
-        factory !== "golang" ||
-        role !== "coder_golang" ||
+        !plan.config.loop ||
         !plan.profile ||
         !Number.isInteger(loop) ||
         loop < 1
       )
         throw new Error(
-          "Loop requires explicit Go coder task and positive iterations",
+          "Loop requires an explicit task, configured loop, Pi runner and positive iterations",
         );
-      await approved(client, task.metadata, task.directory);
-      plan.command[plan.command.length - 1] =
-        `/ralph-loop --max-iterations=${loop} Follow the loaded bounded-iteration skill. Read task ${task.directory}, canonical assignment, approvals, spec.html, plan.html and progress.md every iteration. Work on one ready item. Publish progress/results through comms. Stop for missing assignment, changed approval or blockers with <promise>STOP</promise>; use <promise>NEXT</promise> or <promise>COMPLETE</promise> only as defined by the skill. Do not commit without authorization.`;
+      await approved(
+        client,
+        task.metadata,
+        task.directory,
+        plan.config.loop.approval_artifacts,
+      );
+      plan.command[plan.command.length - 1] = plan.config.loop.prompt
+        .replaceAll("{iterations}", String(loop))
+        .replaceAll("{task_dir}", task.directory);
     }
     if (values["dry-run"]) {
       console.log(
@@ -366,7 +372,7 @@ export async function main(argv = process.argv.slice(2)) {
         checkEnv,
         plan.project,
         timeout * 1000,
-        !!loop,
+        loop ? plan.config.loop.commands : [],
       );
       plan.manifest.startup_checked = true;
     } else if (values.check)
@@ -400,7 +406,12 @@ export async function main(argv = process.argv.slice(2)) {
       if (loop) {
         const deadline = Date.now() + timeout * 1000;
         for (;;) {
-          await approved(client, task.metadata, task.directory);
+          await approved(
+            client,
+            task.metadata,
+            task.directory,
+            plan.config.loop.approval_artifacts,
+          );
           const assignments = await client.pages(
             "list_assignments",
             "assignments",

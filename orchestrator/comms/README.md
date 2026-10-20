@@ -122,7 +122,7 @@ The orchestrator creates and retains the task ID, reuses the actual launcher reg
 
 Artifacts remain client-managed files. A decision event can include `data.outcome`, `data.artifacts` with paths and hashes, and a rationale in `message`. Check evidence can include commands, exit status, output references, tool versions, and MCP names. These values are submitted claims; the server does not inspect host files, run checks, validate artifact hashes, or grant approval. Secrets should never be included in event/message bodies; no automatic redaction is performed.
 
-**Factory integration:** all six roles reference [skills/task-comms](skills/task-comms/SKILL.md) from their configuration; the launcher loads that skill and a native connection. The TypeScript helpers use the same MCP tools through the [official SDK wrapper](../lib/client.ts). They do not open SQLite or maintain separate task state. Native agent clients remain the preferred interface.
+**Factory integration:** team factory members should reference [skills/task-comms](skills/task-comms/SKILL.md) from their configuration; the launcher loads the selected skill and native connection. The TypeScript helpers use the same MCP tools through the [official SDK wrapper](../lib/client.ts). They do not open SQLite or maintain separate task state. Native agent clients remain the preferred interface.
 
 The local `task.json` links a document directory to a service task ID and explicit project. Use `create_task` then the artifact helper's `attach` operation when working through native MCP. The launch approval guard reads comms decision events and checks current local HTML hashes. Old file-only task records are not silently imported. See [coordinator operations](../references/operations.md).
 

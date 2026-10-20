@@ -19,7 +19,7 @@ The orchestrator explicitly chooses participants, supplies scope and relevant pe
 
 An existing agent can coordinate if it has this skill and working MCP tools. For new work, use `create_task` with an explicit project, brief, name, owner, and stable request key. Resolve resume requests with project-scoped `list_tasks`; ask when ambiguous. Retain the returned task ID and inspect current status, decisions, relevant messages, and artifacts before dispatching work.
 
-In the supplied `factory.json` defaults, the Go owner is `coordinator`, writing owner is `pair_writer`, and the project identifier is the selected application root. For local document scaffolding, use the artifact helper in [coordinator operations](../../../references/operations.md); it attaches the service task instead of creating another one. `task.json` links documents to comms, not a second state store. Application code belongs in the project workspace.
+Read the task owner from the selected `factory.json`. The project identifier is the selected application root. For local document scaffolding, use the artifact helper in [coordinator operations](../../../references/operations.md); it attaches the service task instead of creating another one. `task.json` links documents to comms, not a second state store. Application code belongs in the project workspace.
 
 If comms is unavailable, report the failure and pause dependent coordination. Never create a competing file mailbox or claim an unsuccessful remote write was saved.
 

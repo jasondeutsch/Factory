@@ -93,12 +93,30 @@ export function factoryDefinition(name: string) {
         "extensions",
         "agents",
         "terminal_host",
+        "artifacts",
       ].includes(field)
     )
       throw new Error(`Unknown factory field: ${field}`);
   for (const key of ["defaults", "providers", "mcps", "extensions"])
     if (key in definition && !object(definition[key]))
       throw new Error(`${key} must be an object`);
+  if ("artifacts" in definition && !object(definition.artifacts))
+    throw new Error(
+      "artifacts must map output filenames to HTML template paths",
+    );
+  for (const [name, template] of Object.entries(definition.artifacts || {})) {
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9_.-]*\.html$/.test(name) ||
+      typeof template !== "string" ||
+      path.isAbsolute(template)
+    )
+      throw new Error(
+        "artifacts require HTML filenames and relative template paths",
+      );
+    const file = fs.realpathSync(path.resolve(base, template));
+    if (!inside(ROOT, file) || !fs.statSync(file).isFile())
+      throw new Error("Artifact template must be a file inside .factory");
+  }
   const names = new Set();
   for (const member of definition.agents) {
     if (
@@ -191,7 +209,29 @@ export function factoryDefinition(name: string) {
       "auth_file_env",
       "mcp_auth_file_env",
       "check_timeout_seconds",
+      "loop",
     ];
+    if (resolved.loop !== undefined) {
+      const loop = resolved.loop;
+      if (
+        !object(loop) ||
+        Object.keys(loop).some(
+          (k) => !["prompt", "approval_artifacts", "commands"].includes(k),
+        ) ||
+        typeof loop.prompt !== "string" ||
+        !loop.prompt.includes("{iterations}")
+      )
+        throw new Error("loop requires a prompt containing {iterations}");
+      strings(loop.approval_artifacts, "loop.approval_artifacts");
+      strings(loop.commands, "loop.commands");
+      if (
+        !loop.approval_artifacts.length ||
+        loop.approval_artifacts.some(
+          (name: string) => !Object.hasOwn(definition.artifacts || {}, name),
+        )
+      )
+        throw new Error("loop approvals must name configured artifacts");
+    }
     for (const key of Object.keys(resolved))
       if (!supported.includes(key))
         throw new Error(`Unsupported agent config field: ${key}`);

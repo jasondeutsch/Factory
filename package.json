@@ -8,8 +8,8 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "node --test orchestrator/tests/*.test.ts factories/*/tests/*.test.ts",
-    "format": "prettier --write \"orchestrator/**/*.ts\" \"factories/*/tests/*.ts\""
+    "test": "node --test orchestrator/tests/*.test.ts",
+    "format": "prettier --write \"orchestrator/**/*.ts\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",

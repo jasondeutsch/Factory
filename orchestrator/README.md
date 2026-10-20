@@ -1,6 +1,6 @@
 # Agent startup and configuration
 
-The configuration you edit is **`factories/<name>/factory.json`**. It contains shared defaults and member overrides, plus named providers, MCPs, extensions, and skill selections. The [factory reference](../factories/README.md) documents every field. Agent directories contain behavior and reusable resources, not competing configuration files.
+The configuration you edit is **`factories/<name>/factory.json`**. It contains shared defaults and member overrides, plus named providers, MCPs, extensions, and skill selections. The [factory reference](../docs/configuration.md) documents every field. Agent directories contain behavior and reusable resources, not competing configuration files.
 
 ## How configuration reaches Pi
 
@@ -44,9 +44,9 @@ The launcher appends the role instruction, selected factory recipe, and every se
 From the application root:
 
 ```bash
-.factory/orchestrator/start.sh --factory golang
-.factory/resources/agents/architect/start.sh --factory golang
-.factory/factories/golang/agents/coder_golang/start.sh <task-directory>
+.factory/orchestrator/start.sh --factory team
+node .factory/orchestrator/session.ts architect --factory team
+node .factory/orchestrator/session.ts builder <task-directory>
 ```
 
 Without a task, `--factory` is required. With a task directory, its recorded factory is used; a conflicting `--factory` fails. No session selects the newest task automatically. Launch workers in their visible panes through [dispatch](references/dispatch.md), not in the coordinator's blocking shell.
@@ -57,14 +57,14 @@ Every prepared Pi profile loads the toolkit's native delivery extension. It poll
 
 Set `FACTORY_TERMINAL_HOST=herdr`, `terminal`, or `iterm`, or set `terminal_host` at the top of `factory.json`. The environment overrides configuration. The default is Herdr when `HERDR_ENV=1`, otherwise Terminal on macOS. Terminal and iTerm support is currently macOS-only. Other hosts can launch sessions manually. Terminal windows must already have credentials and service settings in their shell environment; the launcher does not copy secrets into command files. Live window/pane acceptance remains pending.
 
-`make -C .factory start FACTORY=golang` is an equivalent coordinator shortcut.
+`make -C .factory start FACTORY=team` is an equivalent coordinator shortcut.
 
 ## Preview and check
 
 ```bash
-.factory/resources/agents/architect/start.sh --factory golang --dry-run
-.factory/resources/agents/architect/start.sh --factory golang --check
-.factory/orchestrator/start.sh --check-factory --factory golang
+node .factory/orchestrator/session.ts architect --factory team --dry-run
+node .factory/orchestrator/session.ts architect --factory team --check
+.factory/orchestrator/start.sh --check-factory --factory team
 ```
 
 `--dry-run` writes nothing and does not connect or start an agent; a loop preview reads its task approvals. It reports the selected model, thinking, tools, MCP/extension names, instructions, and paths, excluding raw credentials and native provider settings.
@@ -77,17 +77,17 @@ Normal Pi startup runs the same checks, then starts interactive Pi in the applic
 
 ## Credentials and MCPs
 
-Use environment references in factory provider definitions and MCP headers. The supplied examples are placeholders, not usable endpoints. Only selected MCPs are materialized; unselected services do not require credentials.
+Use environment references in factory provider definitions and MCP headers. Any illustrative endpoints/models in a tools repository must be replaced with usable values. Only selected MCPs are materialized; unselected services do not require credentials.
 
 Stdio MCPs run from the application root. A relative MCP `cwd` resolves from that root. For native Pi settings that refer to filesystem resources, use absolute paths; there is no authored native profile directory to copy. Git/registry extension sources remain native Pi package definitions.
 
 To reuse native authentication, set `auth_file_env` or `mcp_auth_file_env` to an environment variable holding an absolute private file path outside the toolkit. The launcher links that file into the generated profile, explicitly sharing refreshes. Otherwise newly written auth stays in the private session. The host environment is inherited; `env` supplements it rather than sandboxing it. `FACTORY_*`, `COMMS_AUTH_TOKEN`, and `PI_CODING_AGENT_DIR` cannot be remapped per member.
 
-Enable Linear by selecting the factory's `linear` MCP for that member and exporting `LINEAR_API_KEY`. Its supplied endpoint is read-only. Reading the Linear skill alone does not establish a connection; restart with the updated configuration. gopls is selected for Go coder/reviewer and must be installed on PATH.
+Enable a tool by defining/selecting its MCP in your factory and providing its dependencies and credentials. Reading a skill does not establish a connection; restart with updated configuration. The framework does not bundle application-specific MCP definitions.
 
 ## Task artifacts and recovery
 
-Comms owns task state, assignments, messages, decisions, and evidence. Local `.factory/tasks/<UTC-millisecond-timestamp>-<slug>/` directories contain documents and a `task.json` service link. Go tasks scaffold `spec.html` and `plan.html`; other factories receive the pointer and reviews directory without those documents. Progress and reviews remain with the task.
+Comms owns task state, assignments, messages, decisions, and evidence. Local `.factory/tasks/<UTC-millisecond-timestamp>-<slug>/` directories contain documents and a `task.json` service link. Only documents declared in the selected factory's `artifacts` map are scaffolded; every task receives its pointer and reviews directory. Progress and reviews remain with the task.
 
 Task-bound launches register the actual process instance and publish an immutable public session snapshot: runner, model, thinking, selected MCPs, instruction/skill hashes, and startup-check status. It does not fingerprint every provider option or credential. The extension records expiring native runner contact; `working` is host observation, not proof of progress.
 
@@ -95,11 +95,9 @@ The Compose named volume retains SQLite history across restarts; `down -v` delet
 
 See [operations](references/operations.md), [dispatch and recovery](references/dispatch.md), and [database storage](comms/README.md#shared-database-volume).
 
-## Ralph implementation loops
+## Configured loop launches
 
-The Go factory defines the pinned Ralph package under `extensions` and selects it only for the coder. `--loop 5` requires a task, current spec/plan approvals, and an actual active assignment. The launcher checks native command registration, registers itself, waits for assignment, and rechecks approval before starting the loop. This can download the package; configure an existing local source for offline use.
-
-Ralph runs interactively in the coder's pane. It is not a Factory scheduler or a separate agent. The native plugin's `.ralph/` state permits one active loop per workspace. See [loop behavior and recovery](references/ralph.md).
+Factories may configure a member's `loop` settings and required Pi extension commands. The launcher verifies its selected artifact approvals, registers the instance, waits for an assignment, and rechecks approvals before starting. The extension owns iteration behavior; Factory neither chooses a loop plugin nor prescribes its prompts. See [configuration](../docs/configuration.md#optional-pi-loop-launch).
 
 ## Other runners
 
@@ -109,4 +107,4 @@ Pi model/tool settings inherited from factory defaults do not apply to command r
 
 ## Add a member
 
-Create a directory with `agent.md`, skills/scripts as needed, and a thin start script calling `session.ts <role>`. Add its name, relative path, resource selections, and any execution overrides to the factory file. Keep the recipe human-readable. Adding a member does not introduce a workflow DSL or generalize the Go-specific document scaffolding and loop shortcut.
+Create a directory with `agent.md`, skills/scripts as needed, and a thin start script calling `session.ts <role>`. Add its name, relative path, resource selections, and any execution overrides to the factory file. Keep the recipe human-readable. Task templates and loop settings come from the selected factory; names and directory placement do not imply behavior.

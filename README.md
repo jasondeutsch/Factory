@@ -1,86 +1,68 @@
 # Factory
 
-A portable toolkit for coordinating interactive agents. An agent follows your team's factory recipe, delegates work to visible sessions, and records assignments, decisions, and evidence through an MCP service. You drive the task through conversation.
+A lightweight framework for coordinating visible, interactive agent sessions. A coordinating agent delegates work, gathers results, and brings decisions back to the user. Comms records tasks, messages, approvals, evidence and usage; the framework does not execute a workflow graph.
 
-## Layout and configuration
+This repository owns the shared runtime. **Individual factories, agents, skills, templates, models and tool choices live in a separate repository**, such as `tools`, or in your team's own configuration.
+
+## What belongs here
 
 ```text
-orchestrator/       # Coordinator, MCP server, launchers, delivery, and infrastructure tests
-resources/          # Reusable architect/reviewer agents and shared skills
-factories/
-  golang/           # Go factory definition, recipe, agents, skills, templates, and tests
-  writing/          # Writing factory definition, recipe, and pair-writer agent
-docs/               # Setup, troubleshooting, and tool tradeoffs
+orchestrator/  # Coordinator instructions, launchers, Pi delivery adapter, Go MCP service, tests
+docs/         # Framework setup, configuration and operating reference
 ```
 
-**Each factory's `factory.json` declares its member names, bundle paths, and task owner.** Its `README.md` describes how those members work together. Directory placement does not define membership. See the [configuration reference](factories/README.md), [Go configuration](factories/golang/factory.json), and [writing configuration](factories/writing/factory.json).
+The coordinator and task-comms skill are framework infrastructure. A Go coder, architecture reviewer, writing agent, or third-party plugin selection is team content and belongs outside this repo.
 
-`factory.json` is the single authored configuration source: set shared execution choices in `defaults`, define providers/MCPs/extensions once, and override only what differs for a member. Agent directories hold instructions, skills, and scripts. [How configuration reaches Pi](orchestrator/README.md#how-configuration-reaches-pi) explains how `session.ts` generates each agent's private native files.
+## Install into a project
 
-## Install in a project
+Use one combined `.factory/` directory at the application root:
 
-Copy this directory's contents into `.factory/` at the application root, preserving existing customizations. You can ask your agent:
-
-> Install `/path/to/factory` into this project's `.factory/` directory. Read its README and coordinator skill. Configure the Go factory for our provider and model; keep credentials in environment variables.
-
-With Homebrew already available, install only the factory you need: `make -C factories/golang install` or `make -C factories/writing install`. Each includes the shared coordinator dependencies. The root `make install` installs only Herdr, Git, Go, Node.js 22.18+ (for the TypeScript helpers), Pi, and the npm/comms dependencies. The Go factory additionally installs golangci-lint, gopls, and the coder's pinned Ralph extension; writing adds no extra dependencies. Use `update` in the same directory to update that set. Install Docker with Compose separately. See [setup and troubleshooting](docs/troubleshooting.md) for prerequisites and corporate-network configuration.
-
-The launchers require Node.js 22.18+ and the locked npm dependencies in each toolkit copy (`npm ci --omit=dev`). The Makefile installs those dependencies.
-
-The examples select `team-gateway` and `your-model-id` in `defaults`, with a placeholder URL and `${TEAM_MODEL_API_KEY}` in `providers`. Replace these shared values once, then add member overrides only when needed. See the [factory reference](factories/README.md). The Go coder and reviewer also need gopls with MCP support.
-
-## Start the coordinator
-
-From the application root, select the factory whose coordinator settings should apply:
-
-```bash
-.factory/orchestrator/start.sh --factory golang
+```text
+project/.factory/
+  orchestrator/ docs/  Makefile  package.json  package-lock.json  ...  # Framework
+  factories/    # Your named factory.json configurations and recipes
+  agents/       # Your shared agent bundles
+  skills/       # Your shared skills
 ```
 
-The entrypoint starts local Compose services and waits for MCP connectivity. Set `FACTORY_COMMS_URL` to use an existing service without managing Compose. Pi sessions load a native inbox extension that polls independently of model turns. Choose Herdr panes or macOS Terminal/iTerm windows with `FACTORY_TERMINAL_HOST`. Compose stays running when the coordinator exits. No task or worker starts automatically. `make -C .factory start FACTORY=golang` is the equivalent shortcut. Factory selection is explicit; there is no global coordinator configuration.
+From this framework checkout, install its dependencies and use the preview-first copier:
 
-You can also use an existing agent as coordinator: read `.factory/orchestrator/SKILL.md`, connect its native MCP client to `http://127.0.0.1:8090/mcp`, and reload it. Reading a skill alone does not register tools. The supplied factories select this connection for their members.
+```sh
+npm ci --omit=dev
+node orchestrator/scripts/sync_toolkit.ts /path/to/project/.factory
+node orchestrator/scripts/sync_toolkit.ts /path/to/project/.factory --apply
+```
 
-Use `.factory/orchestrator/start.sh --factory golang --check` to check the selected member's readiness without model inference.
+Then copy `factories/`, `agents/`, and `skills/` from your tools repository into that `.factory/`. Copy directories selectively when a project already has customizations. Do not copy the tools repository's `.git` or root README over the framework. Run `npm ci --omit=dev` in the installed `.factory/`.
 
-## Request work
+Configure provider/model choices and environment references in the selected `factory.json`. Install shared dependencies with `make -C .factory install` if needed; use the tools repository's factory-specific instructions for additional dependencies. Docker with Compose is a separate prerequisite.
 
-> Use the Go factory to reduce repeated account database reads without changing API behavior. Coordinate visible agents and bring the spec and plan back to me for approval.
+## Run and observe
 
-The [Go factory](factories/golang/README.md) uses architecture drafting/review, human spec/plan approval, bounded implementation, and independent code review. Lint and tests are tools used during coding. The coordinator selects declared members as needed, creates assignments, and reports blockers and results. Decisions remain with you unless explicitly delegated.
+From the application root, using an installed factory name:
 
-For writing:
+```sh
+.factory/orchestrator/start.sh --factory <name>
+```
 
-> Use the writing factory to explain our proposed platform to engineering and finance. Discuss the argument with me before drafting.
+The entrypoint starts Compose unless `FACTORY_COMMS_URL` points to an existing service. Pi sessions load the native inbox adapter. `FACTORY_TERMINAL_HOST` selects `herdr`, `terminal`, or `iterm`; the latter two currently support macOS. No task, worker, or approval is created automatically.
 
-The [writing factory](factories/writing/README.md) uses the interactive pair writer without mandatory spec/plan documents. Both factories can start from conversation; you do not need to prepare a request file or operate task lifecycle scripts. [Linear context](orchestrator/README.md#credentials-and-mcps) is optional when requested and configured.
+Ask the coordinator to perform work using the selected recipe. Workers stay visible so you can inspect them and provide direct feedback. Pi's adapter delivers message hints independently of the terminal host. Message states are `sent → read → exec`; assignment acceptance and completion are separate.
 
-## Observe and give feedback
+Comms and its read-only SQLite admin panel run together through Compose. Task records persist in its named volume. Project documents live in `.factory/tasks/`; private session profiles/transcripts live under `$HOME/.factory/runtime/`. Application changes belong in the application workspace.
 
-Ask the coordinator for progress, unresolved questions, evidence, or the task report. Enter a worker's pane to give feedback directly; consequential changes should be reported back to the coordinator.
+## Boundaries
 
-Each bundle has a thin `start.sh` for manual startup. An explicit task-directory argument binds the session to that task's factory. `--dry-run` previews configuration; `--check` checks native readiness without model inference. See [agent startup](orchestrator/README.md#start-a-role).
+Agents retain host permissions. This framework is not a sandbox, scheduler, model provider, or per-agent authentication system. A stopped process cannot receive notifications. Recorded approvals represent declared authority; missing usage remains unknown. Committing or contacting external systems requires authorization.
 
-Pi's [native delivery extension](orchestrator/comms/delivery.md) brings inbox notifications into running sessions. It works independently of the terminal host. Message states are **sent → read → exec**; execution means the recipient declared it began acting, not that the work finished. A stopped process still needs to be restarted by its host. Other runners can implement the same MCP contract or check inboxes manually.
+Framework updates manage only framework files; they do not update or delete your `factories/`, `agents/`, or `skills/`. Existing sessions keep their prepared configuration until restarted.
 
-## Records and limits
+## Documentation
 
-The [orchestrator MCP server](orchestrator/comms/README.md), called `comms` in agent connections, stores task status, assignments, messages, decisions, events, and measured usage. The same Compose file starts its read-only SQLite admin panel at `http://127.0.0.1:8091/`. Both share a named volume that retains task history across container replacement; `docker-compose down -v` explicitly deletes it.
-
-Local documents live in `.factory/tasks/`, created when needed. Private profiles and transcripts live under `$HOME/.factory/runtime/`. Application changes belong in the application workspace. See [task artifacts and recovery](orchestrator/README.md#task-artifacts-and-recovery) for identities, storage, resume, and retention.
-
-This is an agent-driven process, not a workflow execution engine or enforced sandbox. Agents retain host permissions; prompts do not isolate reviewers or authenticate approvals. Missing usage remains unknown. Git is optional for application work, and committing requires authorization. [Tools and tradeoffs](docs/tools.md) describes these boundaries.
-
-## References
-
-
-- [Factory configuration](factories/README.md): membership, paths, ownership, and customization.
-- [Session configuration](orchestrator/README.md): profiles, skills, providers, and MCPs.
-- [Coordinator operations](orchestrator/references/operations.md): agent-facing helpers and bookkeeping.
-- [Participants and assignments](orchestrator/comms/coordination.md): lifecycle, ownership, retries, and recovery.
-- [Setup and troubleshooting](docs/troubleshooting.md): dependencies, failures, and developer tests.
-- [Ralph integration](orchestrator/references/ralph.md): bounded iteration and recovery limits.
-
-For reliable coordinator handoffs, see [dispatch and recovery](orchestrator/references/dispatch.md). For infrastructure evidence and the separate live acceptance run, see [coordination verification](orchestrator/tests/README.md).
-
-Install or update a project copy with the [toolkit updater](docs/toolkit-updates.md). Team-owned `factories/` stays separate from maintained orchestration/resources; updates preview changes and stop on conflicting edits.
+- [Configuration contract](docs/configuration.md): membership, resources, task templates and optional loop settings.
+- [Agent startup](orchestrator/README.md): native profiles, checks and runner integration.
+- [Delivery contract](orchestrator/comms/delivery.md): Pi and other runners; sent/read/exec semantics.
+- [Coordinator operations](orchestrator/references/operations.md) and [dispatch recovery](orchestrator/references/dispatch.md).
+- [Comms](orchestrator/comms/README.md): service, storage and reports.
+- [Toolkit updates](docs/toolkit-updates.md), [troubleshooting](docs/troubleshooting.md), and [tradeoffs](docs/tools.md).
+- [Verification](orchestrator/tests/README.md): automated checks and pending live acceptance.

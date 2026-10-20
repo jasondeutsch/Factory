@@ -12,33 +12,13 @@ Users can ask their coordinator to configure or repair the setup. The diagnostic
 | Selected provider, actual model ID, and credentials | Each new configured model session. | No; replace the clearly labeled gateway/model examples in the factory defaults/provider definitions and any member overrides. |
 | Go 1.26 | Build/run the optional host delivery bridge (a built binary avoids the runtime toolchain). | No, unless running the bridge from source. |
 | Herdr or macOS Terminal/iTerm | Automated visible agent sessions. | Select with `FACTORY_TERMINAL_HOST`; manual startup remains possible elsewhere. |
-| Go and project dependencies | Implementing and verifying Go code. | No. |
-| gopls with MCP support | Enabled coder/reviewer gopls connections. | No; disable explicitly if the task will proceed without it. |
-| golangci-lint and `gofmt` on PATH | The optional Go check script. | No; use versions compatible with the project. |
-| Git and network access to the pinned source, or an available local checkout | Obtaining Ralph for a new private profile. | The package declaration is supplied; Pi obtains the code. |
-| `LINEAR_API_KEY` and network access | An enabled Linear connection. | Configuration is supplied, initially disabled. |
+| Dependencies selected by your factory | Language tools, MCP servers and third-party extensions. | Supplied/configured by your tools repository, not the framework. |
 
 Agent work runs on the host in ordinary sessions; no agent image or container sandbox is supplied. The [comms service](../orchestrator/comms/README.md) runs through Docker Compose and is required by the supplied task flow. It starts comms and the read-only admin panel together, with a shared named SQLite volume that survives container replacement. No database lives under the host home directory.
 
 ## Dependency commands
 
-Install or update dependencies through the selected factory's Makefile. From the application root:
-
-```bash
-make -C .factory/factories/golang install
-# Later, when you intend to update its tools:
-make -C .factory/factories/golang update
-```
-
-Use `writing` instead of `golang` for the writing factory. In the toolkit source checkout, omit `.factory/` from these paths. Each factory calls the root shared target before its own commands. The root [Makefile](../Makefile) installs Herdr, Git, Go, Node.js 22.18+, Pi for the supplied coordinator, and comms Go dependencies. Writing currently needs only that shared set. Go adds golangci-lint, gopls, and the coder's declared Ralph extension. These commands install on the host; they do not isolate versions between factories. Review project toolchain constraints before upgrading.
-
-Homebrew must already be installed. Pi uses its [official installer](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md#getting-started). Updates use Homebrew for its managed tools and `pi update self` for installer-managed Pi. If your Pi comes from another package manager, use that manager instead. Factory Makefiles remain explicit commands for host tools; the Go extension-install helper reads its coder's selected packages from `factory.json`. Update them when customizing the agents' tools or runners.
-
-Ensure `pi` and the Go binary directory (`go env GOBIN`, or `$(go env GOPATH)/bin` when empty) are on PATH. Docker/Compose, model credentials, and enabled MCP credentials remain explicit setup. These targets install tools; they do not configure providers, approve work, or start tasks.
-
-The Go factory's dependency targets install its selected Pi packages in a private generated profile, with project trust disabled. The source and pin come from `factory.json`, not a second authored Pi file. Fresh agent profiles may obtain their own package copies; use an absolute local source for offline operation. No credentials or extension caches are written into the authored agent directory.
-
-`make -C .factory start FACTORY=golang` starts the selected coordinator. The entrypoint accepts either Compose command and starts local services automatically unless `FACTORY_COMMS_URL` selects an existing endpoint. Check-only mode requires services to be running already. Compose remains running after coordinator exit.
+Run `make -C .factory install` for shared framework dependencies. Install Docker/Compose separately. After copying a tools repository's content, follow that repository's factory-specific dependency instructions. The framework source contains no runnable factories or language tools.
 
 ## First setup through an agent
 
@@ -67,7 +47,7 @@ Use each role's `start.sh` for consistent startup; the shared launcher resolves 
 | TLS, proxy, or corporate CA failure | Identify whether the failing client is Pi/Node, Git, Go, or the remote service. Apply the organization's trust/proxy setup to that client. The wrapper can map `NODE_EXTRA_CA_CERTS` to an existing variable holding a CA file path; this does not configure Git or Go trust. Keep certificate verification enabled. |
 | gopls is missing or cannot load the module | Check the exact executable, Go version, module/workspace configuration, and command output. Correct the environment or explicitly disable that connection and record the limitation. Do not silently install or upgrade the toolchain. |
 | Linear is unavailable | Check that the role's entry is enabled, `LINEAR_API_KEY` is present, and the key can read the intended workspace. Reconnect or start a session with the updated configuration. An unavailable connection is not evidence that the issue does not exist. |
-| Ralph command is unavailable or plugin download fails | Inspect private startup diagnostics. Check source access and the pinned package declaration, or configure an existing local checkout. The application itself need not be a Git repository. |
+| Selected extension command is unavailable or plugin download fails | Inspect private startup diagnostics. Check source access and the factory package declaration, or configure an existing local checkout. The application itself need not be a Git repository. |
 | `--loop` refuses approval | Compare current HTML hashes and the latest artifact-specific decisions. Present any changed documents for the actual required decision. Do not manufacture approval to clear the error. |
 | A startup check times out | Identify the slow check and its output. Use `check_timeout_seconds` only when the work is legitimately slow; raising it does not fix missing credentials or a hung service. Each process check defaults to 30 seconds, configurable up to 300. |
 | A message was saved but notification failed | Retain the message ID. Inspect the recipient extension's binding and connection, then retry without duplicating the assignment. |

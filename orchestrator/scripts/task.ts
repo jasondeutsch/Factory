@@ -60,7 +60,7 @@ export async function attachRecord(
           target = dir;
           for (const file of [
             "reviews",
-            ...(factory === "golang" ? ["spec.html", "plan.html"] : []),
+            ...Object.keys(definition.artifacts || {}),
           ])
             if (!fs.existsSync(path.join(dir, file)))
               throw new Error(
@@ -82,23 +82,24 @@ export async function attachRecord(
       const staging = fs.mkdtempSync(path.join(root, ".attaching-"));
       try {
         fs.mkdirSync(path.join(staging, "reviews"));
-        if (factory === "golang")
-          for (const document of ["spec", "plan"]) {
-            const template = fs.readFileSync(
-              path.join(ROOT, "factories/golang/templates", document + ".html"),
-              "utf8",
-            );
-            const text = template.replace(
-              /\$\$|\$\{?([a-zA-Z_][a-zA-Z_0-9]*)\}?/g,
-              (match, key) => {
-                if (match === "$$") return "$";
-                if (!["title", "brief"].includes(key))
-                  throw new Error(`Unknown template variable: ${key}`);
-                return escapeHTML(key === "title" ? record.name : record.brief);
-              },
-            );
-            fs.writeFileSync(path.join(staging, document + ".html"), text);
-          }
+        for (const [document, templatePath] of Object.entries(
+          definition.artifacts || {},
+        )) {
+          const template = fs.readFileSync(
+            path.resolve(ROOT, "factories", factory, templatePath as string),
+            "utf8",
+          );
+          const text = template.replace(
+            /\$\$|\$\{?([a-zA-Z_][a-zA-Z_0-9]*)\}?/g,
+            (match, key) => {
+              if (match === "$$") return "$";
+              if (!["title", "brief"].includes(key))
+                throw new Error(`Unknown template variable: ${key}`);
+              return escapeHTML(key === "title" ? record.name : record.brief);
+            },
+          );
+          fs.writeFileSync(path.join(staging, document), text);
+        }
         writeJSON(path.join(staging, "task.json"), {
           schema_version: 2,
           id: path.basename(target),

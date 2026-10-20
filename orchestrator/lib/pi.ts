@@ -167,7 +167,7 @@ export async function check(
   env: NodeJS.ProcessEnv,
   cwd: string,
   timeout: number,
-  loop = false,
+  requiredCommands: string[] = [],
 ) {
   if (!profile.summary.provider || !profile.summary.model)
     throw new Error(
@@ -229,12 +229,7 @@ export async function check(
         names = (response?.data?.commands || []).map(
           (v: RecordValue) => v.name,
         );
-      for (const command of [
-        "factory-inbox",
-        ...(loop
-          ? ["ralph-loop", "ralph-status", "ralph-stop", "ralph-resume"]
-          : []),
-      ])
+      for (const command of ["factory-inbox", ...requiredCommands])
         if (!names.includes(command))
           throw new Error(
             `Pi command unavailable: ${command}; diagnostics: ${file}`,

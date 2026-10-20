@@ -9,7 +9,7 @@ npm test
 (cd orchestrator/comms && go test -race ./...)
 ```
 
-TypeScript tests build comms with Go and start isolated localhost servers with disposable SQLite databases. They use temporary project copies and terminal fixtures, not the normal Compose service. `FACTORY_TEST_COMMS` may point to an already built comms binary. Set `FACTORY_TEST_PI` to an installed Pi executable to check real native credentials/MCP/extension loading using fixture credentials and no model request. Without it that test is explicitly skipped. Set `FACTORY_TEST_RALPH_DIR` to the pinned plugin checkout as well to run its optional two-iteration test against a local deterministic HTTP model fixture. This exercises plugin transitions, not agent quality.
+TypeScript tests build comms with Go and start isolated localhost servers with disposable SQLite databases. They use temporary project copies and terminal fixtures, not the normal Compose service. `FACTORY_TEST_COMMS` may point to an already built comms binary. Set `FACTORY_TEST_PI` to an installed Pi executable to check real native credentials/MCP/extension loading using fixture credentials and no model request. Without it that test is explicitly skipped. Factory-specific checks, including extension behavior, belong to the tools repository.
 
 For an automated recovery report:
 
@@ -21,7 +21,7 @@ The report includes message-state, contact, retry, attachment, configuration, up
 
 ## Live acceptance (pending)
 
-Use a disposable project and the configured Go factory, with a human present. Keep product implementation and verification with the coder and reviewer.
+Use a disposable project and an installed factory, with a human present. Keep product implementation and verification with the coder and reviewer.
 
 1. Start the coordinator, create/attach a task, and bind it. Confirm the status shows connected and the snapshot reports native contact.
 2. Dispatch a worker. Verify a visible Herdr pane or Terminal/iTerm window opens with its selected configuration and skills.

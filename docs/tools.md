@@ -1,95 +1,18 @@
-# Tools and tradeoffs
+# Framework tools and tradeoffs
 
-Factory combines role instructions, skills, native agent configuration, and small bookkeeping helpers. Each factory's `factory.json` declares member names, bundle paths, and task ownership; its recipe describes how those agents should work together. The coordinator interprets those recipes and makes assignments; no Factory daemon executes them.
+Factory supplies coordination infrastructure; teams supply agents and factory configurations in a separate repository. No application language, model, review policy or third-party agent plugin is selected by this framework.
 
-The [comms service](../orchestrator/comms/README.md) is the shared Go MCP server with embedded SQLite for tasks, messages, decisions, evidence, usage, and reports. All roles import its skill and connection. The single Compose file starts comms and its read-only admin panel using a shared named data volume. No separate SQLite service is needed.
-
-```mermaid
-flowchart LR
-    User[Human] <--> Coordinator[Coordinating agent]
-    Coordinator <--> Records[Comms MCP · SQLite records and reports]
-    Coordinator --> Herdr[Herdr pane controls]
-    Herdr --> Pi[Visible Pi role sessions]
-    Pi <--> Records
-    Pi --> Provider[Configured model provider]
-    Pi --> MCP[gopls and Linear MCPs]
-    Pi --> Project[Project files and commands]
-    Ralph[Ralph loop plugin] -->|fresh coder iterations| Pi
-```
-
-Herdr is optional: agents can use manually opened sessions. Shared defaults and member overrides select each role's model. Agents communicate through the comms MCP inbox tools. Pi's native extension handles live notification, while gopls and Linear are separate task tools.
-
-## External tools
-
-| Component | What it does here | Benefit | Tradeoff |
-| --- | --- | --- | --- |
-| SQLite Web | Browser interface for the comms SQLite database. | Table/schema browsing, read-only SQL queries, and exports. | Starts with comms from the same Compose file and reads its shared persistent volume. Localhost-only; independent of MCP token authentication. |
-| Comms / SQLite | Stores tasks, inbox messages, evidence, decisions, and submitted usage; renders HTML reports. | Shared transactional records through standard MCP tools. | Requires a reachable service. Task data persists in the named volume; explicit volume removal deletes it. Messages need a running delivery adapter; usage is not automatically collected. |
-| Pi | Runs interactive role sessions with native model, tool, extension, and MCP configuration. | Reuses an existing agent runtime instead of building one. Each role has its own configuration. | Runnable bundles depend on Pi's CLI and native formats. Switching runners requires an explicit adapter and runner-specific setup. |
-| `edxeth/pi-ralph-loop` | Repeats a coder assignment across fresh Pi sessions. | Long assignments can retain durable progress while discarding accumulated conversation history. | One active loop per project workspace, additional model requests, and loss of feedback that was never recorded. Plain-prompt completion depends on the agent's evidence. |
-| Herdr | Opens visible panes and exposes terminal output; optional fallback delivery for non-native runners. | Humans can observe agents and intervene directly. | The coordinator must run inside Herdr to use the supplied controls. Input submission does not prove receipt or completion, and terminal output is not a durable handoff. |
-| gopls MCP | Exposes Go-aware project exploration and diagnostics through `gopls mcp`. | Gives agents language-aware context alongside source and shell tools. | Requires a compatible installed gopls and working Go project. Each configured session may start a separate process. It is not a substitute for tests or review. |
-| Linear MCP | Reads requested issues and related context through Linear's hosted read-only endpoint. | Uses the official service without adding a local bridge or maintaining a Linear API client. | Needs network access and credentials. Tickets can be ambiguous or change after approval; retrieved context must be attributed and reconciled with the task. |
-| Go toolchain and golangci-lint | Compile, format, test, and lint the application. | Produce executable verification evidence rather than model predictions. | Must match the application's Go version, module layout, and lint configuration. Existing failures may be unrelated to the task. |
-| Node.js 22.18+, TypeScript and a POSIX shell | Run launchers, bookkeeping, and the Pi delivery extension; shell runs the Go check script. | One language for host integration and Pi extensions; official MCP SDK. | Run `npm ci --omit=dev` in each toolkit copy. Node executes erasable TypeScript directly; developer checks use TypeScript. |
-| Git | Can help inspect changes and obtain the pinned Ralph package. | Familiar source inspection and a pinned plugin revision. | Application tasks do not require a Git repository, but fetching the declared Git package needs Git and network access. Committing remains separately authorized. |
-
-Pi receives normal file and shell tools through generated `settings.json`, resolved from factory defaults and member overrides. Their presence allows an agent to inspect or change files and run commands; a reviewer prompt does not remove the host account's filesystem permissions. See [session configuration](../orchestrator/README.md) for the actual per-role settings.
-
-The configured gopls connection runs in detached stdio mode and sees saved files, not an editor's unsaved buffers. gopls may invoke Go to load packages, download modules, and write caches. Its MCP support is experimental, so inspect the installed server's advertised tools rather than assuming a fixed catalog. [gopls documentation](https://go.dev/gopls/features/mcp)
-
-Linear is defined in the Go factory but unselected initially. Its `https://mcp.linear.app/mcp/readonly` endpoint exposes only read tools; the key comes from `LINEAR_API_KEY`. It does not automatically move a ticket to in progress, post results, or create follow-up issues. [Linear documentation](https://linear.app/docs/mcp)
-
-Ralph is a native third-party extension, not a bundled Bash loop or a Factory workflow engine. The coder's settings pin the source revision. Pi can install it in a private runtime profile, which means a newly prepared profile may need to download it again. A local source override can avoid that download. [Ralph integration and limits](../orchestrator/references/ralph.md)
-
-## Included helper tools
-
-These commands are for agents and maintainers. Users normally request their outcomes in conversation.
-
-| File | Responsibility | Important boundary |
+| Component | Purpose | Tradeoff |
 | --- | --- | --- |
-| [scripts/task.ts](../orchestrator/scripts/task.ts) | Attaches local artifacts to comms tasks and offers deterministic wrappers for the same MCP tools, including document hashes. | Does not start agents, choose the next stage, poll for replies, or verify work. |
-| `factories/<factory>/agents/<role>/start.sh`, `orchestrator/start.sh` | Start a role using its own bundle through the shared launcher. | Thin entrypoints; task is optional for interactive startup, mandatory for Ralph. No configuration is duplicated in shell. |
-| [orchestrator/session.ts](../orchestrator/session.ts) | Assembles a role's instructions and skills, prepares its native profile, checks startup, and replaces itself with the selected runner. | Starts one interactive session; it is not a supervisor. `--loop N` delegates iterations to the native Ralph plugin. |
-| [orchestrator/lib/pi.ts](../orchestrator/lib/pi.ts) | Generates native Pi JSON from the resolved factory configuration and asks Pi to check credentials, MCPs, and required commands. | An internal library, not another agent launcher or an MCP client implementation. |
-| [lib/core.ts](../orchestrator/lib/core.ts) | Checks local artifact identity, publishes local JSON pointers atomically, and records events through comms. | No local mailbox or event store; service access is required for task state. |
-| [check-go.sh](../factories/golang/agents/coder_golang/scripts/check-go.sh) | Checks formatting without changing files, runs `go test ./...`, then `golangci-lint run` with supplied arguments. | Fails at the first failing step. Requires `go.mod` in the current directory and installed tools. Does not install dependencies, supply lint configuration, or explicitly run a separate `go vet ./...` command. Prefer project commands when they fit better. |
+| Go comms service and SQLite | Durable tasks, assignments, messages, decisions, usage and reports through MCP. | Requires a reachable service. The optional shared bearer token does not authenticate individual agents. |
+| Compose and SQLite Web | Deploy comms with a read-only database admin panel. | Requires Docker/Compose. The named volume persists until explicitly removed. |
+| TypeScript launchers and official MCP SDK | Resolve factory configuration, prepare private runner profiles, attach documents and dispatch visible sessions. | Requires Node.js 22.18+ and locked npm dependencies. No container sandbox or workflow scheduler. |
+| Pi adapter and delivery extension | Apply native configuration and queue inbox hints outside model turns. | Pi-specific integration behind a documented runner contract; reconnect can repeat hints. A stopped process cannot be awakened. |
+| Herdr, Terminal, iTerm adapters | Open visible sessions for feedback. | Herdr requires its host context. Terminal/iTerm currently support macOS and require appropriate shell environment settings. |
+| Optional Herdr fallback bridge | Notify runners lacking a native delivery adapter. | Captured bindings and conservative recovery are required; never combine with Pi's native delivery for one recipient. |
 
-`task.ts` exposes `attach`, `new`, `status`, `send`, `inbox`, `ack`, `exec`, `decide`, and `note`. `new` creates HTML drafts only for the Go recipe. Message delivery is the recipient adapter's responsibility. `decide` records declared authority and optional document hashes; it does not authenticate the deciding person.
+The coordinator chooses work from the team's recipe and communicates through comms. Delivery does not choose stages, grant approvals, or establish correct results. A member's instruction/skill selection is explicit in `factory.json`; merely installing a skill does not connect a tool.
 
-`session.ts` supports a read-only `--dry-run`, a native startup `--check`, and an ordinary interactive launch. `--loop N` additionally requires approved current HTML documents, even with `--dry-run`. It supports only the Go coder in the native Pi adapter. Each invocation prepares a new session; invoking it again is not a resume operation. Exact arguments and recovery behavior are in the [operations reference](../orchestrator/references/operations.md) and [Ralph reference](../orchestrator/references/ralph.md).
+The framework's task helper scaffolds only the `artifacts` declared in a selected factory. Its optional loop launch uses member configuration and actual artifact approvals; the selected extension owns iteration behavior. Application checks, ticket tools, model choices, prompts and review methods belong to the tools repository.
 
-## Skills, roles, and recipes
-
-A **role** defines responsibilities and authority. A **skill** gives reusable working guidance. A **tool** performs an operation. A **recipe** describes the collaboration. Configuring a skill does not install a tool, and a recipe is not an executable graph.
-
-Every supplied role explicitly imports the shared [task-comms skill](../orchestrator/comms/skills/task-comms/SKILL.md) from the comms directory and receives its role instructions, its recipe, and the full entrypoint text of each skill selected in `factory.json`. Supporting references are read when relevant. Explicit inclusion makes behavior inspectable; loading many entrypoints also adds prompt tokens, so keep each role's selection focused.
-
-| Guidance | Included in |
-| --- | --- |
-| [Conventional commits](../resources/skills/conventional-commits/SKILL.md) | Architect, architecture reviewer, Go coder/reviewer, and pair writer. Guides messages and scoped authorized commits; never grants permission to commit. |
-| [Evidence-based debugging](../resources/skills/evidence-based-debugging/SKILL.md) | Architect, architecture reviewer, Go coder, and Go code reviewer. |
-| [Linear context](../resources/skills/linear-context/SKILL.md) | Architect, architecture reviewer, and Go code reviewer. |
-| [Bounded iteration](../resources/skills/bounded-iteration/SKILL.md) | Go coder. |
-| [Go quality](../factories/golang/skills/go-code-quality/SKILL.md), [testing](../factories/golang/skills/go-testing/SKILL.md), and [concurrency](../factories/golang/skills/go-concurrency/SKILL.md) | Go coder and Go code reviewer. Applied according to their different responsibilities. |
-| [Spec/plan](../resources/agents/architect/skills/spec-and-plan/SKILL.md), [software architecture](../resources/agents/architect/skills/software-architecture/SKILL.md), and [domain modeling](../resources/agents/architect/skills/domain-modeling/SKILL.md) | Architect; specialized guidance is used only where the task warrants it. |
-| [Architecture challenge](../resources/agents/architecture_reviewer/skills/architecture-challenge/SKILL.md) | Architecture reviewer. |
-| [Go implementation](../factories/golang/agents/coder_golang/skills/go-implementation/SKILL.md) | Go coder. |
-| [Go review](../factories/golang/agents/code_reviewer_golang/skills/go-review/SKILL.md) and [critical code review](../factories/golang/agents/code_reviewer_golang/skills/critical-code-review/SKILL.md) | Go code reviewer. |
-| [Technical writing](../factories/writing/agents/pair_writer/skills/technical-writing/SKILL.md) and [business writing](../factories/writing/agents/pair_writer/skills/business-writing/SKILL.md) | Interactive pair writer. |
-
-Some skills adapt upstream guidance; their adjacent `SOURCES.md` and `LICENSE` files record attribution and retained notices. These local adaptations do not install or automatically update the upstream collections.
-
-## Tradeoffs
-
-The arrangement is small, visible, and easy to customize in a repository. Agents can inspect local documents and use a shared service for task context, humans can intervene in normal sessions, and each team can change roles and recipes directly.
-
-The cost is that coordination is active agent work. Mailboxes do not wake idle agents by themselves. Review limits, single-writer ownership, progress reporting, and most approval behavior are working agreements rather than centrally enforced execution policies. A crashed worker does not automatically update task status, and an idle pane does not establish success.
-
-Native profiles separate runner configuration and transcripts, but all sessions inherit the launcher's environment and retain host permissions. The setup supplies no agent container sandbox, credential filtering, automatic redaction, or authenticated approval service. Comms renders reports from records submitted to its database. It does not automatically collect agent usage; missing measurements remain unknown.
-
-Those limits are relevant when deciding whether this portable setup fits a particular assignment. Use [task artifacts and recovery](../orchestrator/README.md#task-artifacts-and-recovery) to understand the durable evidence and [troubleshooting](troubleshooting.md) when a dependency or handoff fails.
-
-## Inbox delivery
-
-The [Pi delivery extension](../orchestrator/comms/delivery.md) polls through the official TypeScript MCP SDK outside model turns. It queues native follow-ups only when idle; `read` and `exec` require explicit agent tools. It needs a running process, Node dependencies, and reachable comms. It can retry hints but cannot guarantee correct execution or wake a stopped process. Terminal hosts only open visible sessions. The Go Herdr bridge remains an optional fallback for non-native runners; do not run both delivery paths for one recipient.
+See [configuration](configuration.md), [startup](../orchestrator/README.md), and the [delivery contract](../orchestrator/comms/delivery.md) for the operational details. Tests verify protocol and launch boundaries; live model behavior and terminal integration need their own evaluation.

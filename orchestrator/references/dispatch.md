@@ -1,6 +1,6 @@
 # Dispatch one assignment
 
-The coordinator uses `orchestrator/dispatch.ts` to open a visible member session through the configured terminal host, discover its actual participant, create an assignment, and check native delivery contact. The coordinator still chooses what happens next. This operation does not implement a workflow, grant approvals, or start a Ralph loop.
+The coordinator uses `orchestrator/dispatch.ts` to open a visible member session through the configured terminal host, discover its actual participant, create an assignment, and check native delivery contact. The coordinator still chooses what happens next. This operation does not implement a workflow, grant approvals, or start a configured loop.
 
 Write the intended assignment as JSON in the task's documents, for example:
 

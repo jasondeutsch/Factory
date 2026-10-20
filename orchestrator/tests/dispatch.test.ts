@@ -16,7 +16,7 @@ test("dispatch retries reconcile the actual instance without duplicate launches 
     await f.cli("orchestrator/scripts/task.ts", [
       "new",
       "--factory",
-      "golang",
+      "sample",
       "--name",
       "Dispatch",
       "--brief",
@@ -42,7 +42,7 @@ const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.s
 if(args[1]==='split')console.log(JSON.stringify({result:{pane:{pane_id:'fixture-pane'}}}));
 if(args[1]==='run'){
  const words=[...args[3].matchAll(/'([^']*)'/g)].map(m=>m[1]);const instance=words[words.indexOf('--instance-id')+1],identity=words[words.indexOf('--routing-identity')+1];
- const c=new Comms();try{const p=await c.call('register_participant',{task_id:${JSON.stringify(metadata.comms_id)},role:'architect',instance_id:instance,routing_identity:identity,request_key:'launch-'+instance});await c.call('record_session',{task_id:${JSON.stringify(metadata.comms_id)},participant_id:p.id,manifest:{runner:'pi',delivery:'native',skills:[],mcps:[],prepared_at:new Date().toISOString(),configuration_fingerprint:'a'.repeat(64),startup_checked:true},request_key:'snapshot-'+instance});await c.call('record_runner_contact',{task_id:${JSON.stringify(metadata.comms_id)},participant_id:p.id,instance_id:instance,state:'idle'});}finally{await c.close();}
+ const c=new Comms();try{const p=await c.call('register_participant',{task_id:${JSON.stringify(metadata.comms_id)},role:'designer',instance_id:instance,routing_identity:identity,request_key:'launch-'+instance});await c.call('record_session',{task_id:${JSON.stringify(metadata.comms_id)},participant_id:p.id,manifest:{runner:'pi',delivery:'native',skills:[],mcps:[],prepared_at:new Date().toISOString(),configuration_fingerprint:'a'.repeat(64),startup_checked:true},request_key:'snapshot-'+instance});await c.call('record_runner_contact',{task_id:${JSON.stringify(metadata.comms_id)},participant_id:p.id,instance_id:instance,state:'idle'});}finally{await c.close();}
  if(process.env.FAIL_LAUNCH_RESPONSE)process.exitCode=1;
 }
 `,
@@ -50,7 +50,7 @@ if(args[1]==='run'){
   );
   const request = path.join(f.root, "request.json");
   writeJSON(request, {
-    role: "architect",
+    role: "designer",
     title: "Draft",
     instructions: "Draft only",
     stage: "design",

@@ -10,7 +10,6 @@
     "skipLibCheck": true
   },
   "include": [
-    "orchestrator/**/*.ts",
-    "factories/*/tests/*.ts"
+    "orchestrator/**/*.ts"
   ]
 }
