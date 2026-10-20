@@ -13,4 +13,4 @@ update:
 	cd orchestrator/comms && go mod download
 
 start:
-	./orchestrator/start.sh --factory $(FACTORY)
+	./orchestrator/start.sh $(if $(PROJECT),--project "$(PROJECT)") $(if $(FACTORY),--factory "$(FACTORY)")

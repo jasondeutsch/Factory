@@ -18,11 +18,11 @@ Agent work runs on the host in ordinary sessions; no agent image or container sa
 
 ## Dependency commands
 
-Run `make -C .factory install` for shared framework dependencies. Install Docker/Compose separately. After copying a tools repository's content, follow that repository's factory-specific dependency instructions. The framework source contains no runnable factories or language tools.
+Run `make -C "$FACTORY_HOME" install` for shared framework dependencies. Install Docker/Compose separately. Follow the tools repository's factory-specific dependency instructions in that checkout. No copying into the application is required.
 
 ## First setup through an agent
 
-Ask your agent to copy the toolbox's contents into the application's `.factory/` directory, preserving local customization. It should read the coordinator instructions, select the factory, inspect project instructions and available tools, and configure only the roles being used. Existing global Pi settings are not imported implicitly.
+Keep framework and tools in separate checkouts. Ask your agent to create project `factory.json` extending the selected team configuration. It should read the coordinator instructions, select the factory, inspect project instructions and available tools, and configure only the roles being used. Existing global Pi settings are not imported implicitly.
 
 Provide provider/model choices and the **name** of a credential environment variable, not its value in the conversation. Each member can have different execution settings in its factory.json config, including native Pi overrides for custom providers and MCPs. The coordinator configures those member entries and checks the selected factory before launching sessions. In a Git project it also excludes root `.ralph/` runtime state from version control.
 
@@ -30,7 +30,7 @@ For example:
 
 > Configure the architect and Go agents for our OpenAI-compatible gateway at `<base URL>`, using `<model ID>` and `TEAM_MODEL_API_KEY`. Keep Linear disabled. Check setup without starting model work, then start a Go task from my request and bring me the spec and plan for approval.
 
-Start the service from `.factory/orchestrator/comms` with `docker compose up --build -d`. Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
+Start the service from `$FACTORY_HOME/orchestrator/comms` with `docker compose up --build -d`. Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
 
 Use each role's `start.sh` for consistent startup; the shared launcher resolves the declared member path and loads its configuration and skills. No task argument starts an unassigned interactive role. The agent can inspect configuration with a launch dry run and test native readiness with `--check`. Checks do not call the model, though MCP checks start processes or contact configured services and loop checks can download the declared plugin. A successful credential check confirms local resolution; the first real model request can still fail remotely.
 
@@ -40,7 +40,7 @@ Use each role's `start.sh` for consistent startup; the shared launcher resolves 
 | --- | --- |
 | Comms unavailable / HTTP 401 | Check Compose health, matching `FACTORY_COMMS_URL`, and token presence in each session. Do not create a local fallback task store. |
 | Task records are missing | Check the Compose project name and volume. `down -v` deletes task history; ordinary `down` preserves it. Local documents cannot reconstruct a deleted database. |
-| Helpers ask for the project's `.factory` directory | Confirm the toolbox was copied into the intended application root. Do not run task creation from the source toolbox or silently choose a parent project. |
+| Helpers ask for a project `.factory` directory | You are running an older framework checkout. Use the current external checkout's launcher from the application root, or pass `--project`. |
 | Factory member cannot launch | Check its name and bundle path in `factories/<name>/factory.json`. Paths are relative to that file. A task-bound launch only allows its factory's declared members. |
 | Provider or model is unset | Set provider/model in factory defaults or member overrides; define custom endpoints in the factory's providers map. Check protocol and actual model ID instead of guessing them. |
 | Credentials work in one terminal but not an agent pane | Check variable presence and the pane's inherited environment without printing values. The launcher does not source shell startup files. Restart the session with the intended environment or explicitly share its private auth file. |

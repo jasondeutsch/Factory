@@ -1,7 +1,28 @@
-import { ROOT, cli, interactive, isMain, run, sleep } from "./lib/core.ts";
+import {
+  ROOT,
+  cli,
+  interactive,
+  isMain,
+  run,
+  sleep,
+  selectFactory,
+} from "./lib/core.ts";
 import { Comms } from "./lib/client.ts";
 import path from "node:path";
+import fs from "node:fs";
+import { parseArgs } from "node:util";
 export async function main(args = process.argv.slice(2)) {
+  const { values } = parseArgs({
+    args,
+    strict: false,
+    allowPositionals: true,
+    options: { project: { type: "string" }, factory: { type: "string" } },
+  });
+  if (typeof values.project === "string")
+    process.env.FACTORY_PROJECT = fs.realpathSync(values.project);
+  selectFactory(
+    typeof values.factory === "string" ? values.factory : undefined,
+  );
   const command = [
     process.execPath,
     path.join(ROOT, "orchestrator/session.ts"),
@@ -16,7 +37,15 @@ export async function main(args = process.argv.slice(2)) {
     process.exitCode = await interactive(command, process.cwd(), process.env);
     return;
   }
-  run([...command, "--dry-run"]);
+  const validation = await interactive(
+    [...command, "--validate"],
+    process.cwd(),
+    process.env,
+  );
+  if (validation) {
+    process.exitCode = validation;
+    return;
+  }
   if (!process.env.FACTORY_COMMS_URL) {
     const port = process.env.COMMS_PORT || "8090";
     if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535)

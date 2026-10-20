@@ -1,15 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  toolkitRoot,
+  projectRoot,
+  runtimeRoot,
+  tasksRoot,
+  loadFactory,
+  selectFactory,
+} from "./project.ts";
+export {
+  projectRoot,
+  runtimeRoot,
+  tasksRoot,
+  selectFactory,
+} from "./project.ts";
+import { pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import lockfile from "proper-lockfile";
 import { Comms, type RecordValue } from "./client.ts";
-export const ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../..",
-);
+export const ROOT = toolkitRoot;
 export const id = () => randomUUID().replaceAll("-", "");
 export const hash = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
@@ -50,26 +60,14 @@ export function strings(value: unknown, name: string): string[] {
     throw new Error(`${name} must list nonempty strings`);
   return value;
 }
-export function projectRoot() {
-  if (path.basename(ROOT) !== ".factory")
-    throw new Error("Copy the toolkit into the application .factory directory");
-  return fs.realpathSync(path.dirname(ROOT));
-}
-export function runtimeRoot() {
-  const value =
-    process.env.FACTORY_RUNTIME_DIR ||
-    path.join(os.homedir(), ".factory/runtime");
-  if (!path.isAbsolute(value))
-    throw new Error("FACTORY_RUNTIME_DIR must be absolute");
-  return value;
-}
-export function factoryDefinition(name: string) {
-  if (!/^[a-z][a-z0-9_-]*$/.test(name)) throw new Error("Invalid factory name");
-  const base = path.join(ROOT, "factories", name),
-    definition = json(path.join(base, "factory.json"));
+export function factoryDefinition(name?: string) {
+  if (name) selectFactory(name);
+  const { definition } = loadFactory();
+  const base = projectRoot();
   if (
     !object(definition) ||
-    definition.name !== name ||
+    typeof definition.name !== "string" ||
+    !/^[a-z][a-z0-9_-]*$/.test(definition.name) ||
     !Array.isArray(definition.agents) ||
     !definition.agents.length
   )
@@ -94,6 +92,8 @@ export function factoryDefinition(name: string) {
         "agents",
         "terminal_host",
         "artifacts",
+        "runtime_dir",
+        "recipe",
       ].includes(field)
     )
       throw new Error(`Unknown factory field: ${field}`);
@@ -107,15 +107,12 @@ export function factoryDefinition(name: string) {
   for (const [name, template] of Object.entries(definition.artifacts || {})) {
     if (
       !/^[A-Za-z0-9][A-Za-z0-9_.-]*\.html$/.test(name) ||
-      typeof template !== "string" ||
-      path.isAbsolute(template)
+      typeof template !== "string"
     )
-      throw new Error(
-        "artifacts require HTML filenames and relative template paths",
-      );
+      throw new Error("artifacts require HTML filenames and template paths");
     const file = fs.realpathSync(path.resolve(base, template));
-    if (!inside(ROOT, file) || !fs.statSync(file).isFile())
-      throw new Error("Artifact template must be a file inside .factory");
+    if (!fs.statSync(file).isFile())
+      throw new Error("Artifact template must be a file");
   }
   const names = new Set();
   for (const member of definition.agents) {
@@ -140,11 +137,10 @@ export function factoryDefinition(name: string) {
         ].includes(field)
       )
         throw new Error(`Unknown member field: ${field}`);
-    if (typeof member.path !== "string" || path.isAbsolute(member.path))
-      throw new Error("Agent path must be relative");
+    if (typeof member.path !== "string")
+      throw new Error("Agent path is required");
     const directory = fs.realpathSync(path.resolve(base, member.path));
     if (
-      !inside(ROOT, directory) ||
       !fs.existsSync(
         path.join(
           directory,
@@ -152,7 +148,7 @@ export function factoryDefinition(name: string) {
         ),
       )
     )
-      throw new Error("Agent path must reference instructions inside toolkit");
+      throw new Error("Agent path must reference its instructions");
     if ("config" in member && !object(member.config))
       throw new Error("Member config must be an object");
     if ("handoff" in member && !object(member.handoff))
@@ -256,8 +252,6 @@ export function factoryDefinition(name: string) {
           throw new Error(`Unknown ${field}: ${ref}`);
     for (const ref of resolved.skills || []) {
       const file = fs.realpathSync(path.resolve(base, ref));
-      if (!inside(ROOT, file))
-        throw new Error("Skill must stay inside toolkit");
       if (
         !fs.existsSync(
           fs.statSync(file).isDirectory() ? path.join(file, "SKILL.md") : file,
@@ -320,17 +314,23 @@ export function configuration(role: string, factory: string) {
     definition,
     member,
     config,
-    directory: path.resolve(ROOT, "factories", factory, member.path),
-    base: path.join(ROOT, "factories", factory),
+    directory: member.path,
+    base: projectRoot(),
+    source: loadFactory().source,
   };
 }
 export function readTask(value: string) {
   const directory = fs.realpathSync(value);
-  if (path.dirname(directory) !== path.join(ROOT, "tasks"))
-    throw new Error(
-      "Task must be a direct child of this project .factory/tasks",
-    );
   const metadata = json(path.join(directory, "task.json"));
+  if (metadata.project !== projectRoot())
+    throw new Error("Task belongs to another project");
+  if (
+    path.dirname(directory) !==
+    fs.realpathSync(tasksRoot(metadata.factory_config))
+  )
+    throw new Error(
+      "Task must be a direct child of this project runtime tasks directory",
+    );
   if (
     !object(metadata) ||
     metadata.schema_version !== 2 ||

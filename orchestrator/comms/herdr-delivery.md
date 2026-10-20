@@ -15,7 +15,7 @@ The coordinator must itself run inside Herdr (`HERDR_ENV=1`). This is a host pro
 After a session starts, name and inspect the actual agent using the [Herdr adapter](../adapters/herdr/README.md). Capture its reference from inside Herdr:
 
 ```bash
-.factory/orchestrator/start-delivery.sh --bind account-architect
+$FACTORY_HOME/orchestrator/start-delivery.sh --bind account-architect
 ```
 
 This prints one JSON object with `adapter`, `workspace_id`, `pane_id`, `terminal_id`, and `name`. Pass the **serialized object as the `session_ref` string** in `bind_participant`, using its existing participant ID, the caller's participant ID, its current `session_ref` as `expected_session_ref` (initially empty), and a stable request key. The participant itself or task owner may bind it. Record the coordinator's binding too, so replies can wake it. Never copy example IDs or register the bridge as the worker. An empty reference intentionally selects manual delivery. A nonempty legacy plain name is insufficient and produces a visible delivery error.
@@ -25,9 +25,9 @@ Binding the same running instance preserves its participant ID and assignments. 
 Start in a dedicated Herdr pane, with the **exact project identifier stored in comms**, usually the application root:
 
 ```bash
-.factory/orchestrator/start-delivery.sh --project "$PWD"
+$FACTORY_HOME/orchestrator/start-delivery.sh --project "$PWD"
 # Or limit the watch to one known task ID:
-.factory/orchestrator/start-delivery.sh --project "$PWD" --task '<service-task-id>'
+$FACTORY_HOME/orchestrator/start-delivery.sh --project "$PWD" --task '<service-task-id>'
 ```
 
 Use the coordinator's host controls to open this pane; do not block its conversational shell tool with a foreground daemon. The bridge stays visible; stop it with Ctrl-C. `FACTORY_COMMS_URL` and optional `COMMS_AUTH_TOKEN` select the connection; the key never belongs in command arguments. `--url`, `--interval 3s`, and `--once` support diagnostics. Do not set `HERDR_ENV=1` outside Herdr to bypass its boundary. Multiple bridges are unnecessary; service-side claims nevertheless prevent simultaneous sends to the same participant.

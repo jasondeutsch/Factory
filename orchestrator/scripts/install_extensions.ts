@@ -22,7 +22,7 @@ export async function main(args = process.argv.slice(2)) {
     config,
     definition,
     process.cwd(),
-    path.join(runtimeRoot(), "dependencies", args[0], args[1], id()),
+    path.join(runtimeRoot(), "dependencies", definition.name, args[1], id()),
     env,
   );
   materialize(profile);

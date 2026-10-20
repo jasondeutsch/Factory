@@ -7,6 +7,7 @@ import {
   configuration,
   factoryDefinition,
   projectRoot,
+  selectFactory,
   runtimeRoot,
   readTask,
   remoteTask,
@@ -66,10 +67,10 @@ export function prepare(
 ) {
   const project = projectRoot(),
     resolved = configuration(role, factory),
-    { config, directory, base, definition } = resolved;
+    { config, directory, base, definition, source } = resolved;
   const session = path.join(
     runtimeRoot(),
-    hash(project).slice(0, 16),
+    "sessions",
     task ? path.basename(task.directory) : "unassigned",
     role,
     instance,
@@ -87,6 +88,10 @@ export function prepare(
     FACTORY_COMMS_URL:
       process.env.FACTORY_COMMS_URL || "http://127.0.0.1:8090/mcp",
     FACTORY_PROJECT: project,
+    FACTORY_CONFIG: source,
+    FACTORY_TOOLKIT: ROOT,
+    FACTORY_HOME: ROOT,
+    FACTORY_RUNTIME_DIR: runtimeRoot(),
     FACTORY_NAME: factory,
     FACTORY_ROLE: role,
     FACTORY_INSTANCE_ID: instance,
@@ -124,14 +129,18 @@ export function prepare(
       path: m.path,
     })),
   };
-  let instructions = `# Factory session\n\nRole: ${role}\nProject root: ${project}\nToolkit root: ${ROOT}\nInstance ID: ${instance}\nSelected factory configuration: ${path.join(base, "factory.json")}\n`;
+  let instructions = `# Factory session\n\nRole: ${role}\nProject root: ${project}\nToolkit root: ${ROOT}\nRuntime directory: ${runtimeRoot()}\nTasks directory: ${path.join(runtimeRoot(), "tasks")}\nInstance ID: ${instance}\nSelected factory configuration: ${source || "built-in coordinator"}\n`;
   instructions += task
     ? `Task directory: ${task.directory}\nComms task ID: ${task.metadata.comms_id}\nTask owner: ${task.metadata.owner}\nBrief (JSON string): ${JSON.stringify(task.metadata.brief)}\n`
     : "No task selected. Establish an explicit task from the user request; never select the newest. After creating and attaching a task, use factory_bind_task to connect this session.\n";
   instructions +=
     "Workers wait for an explicit assignment. Startup grants no approval. Comms is authoritative for state. Use factory_read_message to retrieve inbox notifications; call factory_exec_message immediately before acting. Completion is recorded through assignment results.\n";
   instructions += `\n## Factory membership\n${JSON.stringify(membership, null, 2)}\n`;
-  for (const file of [instruction, path.join(base, "README.md"), ...skills])
+  for (const file of [
+    instruction,
+    ...(definition.recipe ? [definition.recipe] : []),
+    ...skills,
+  ])
     instructions += `\n## Source file: ${file}\nSource directory for relative references: ${path.dirname(file)}\n\n${fs.readFileSync(file, "utf8")}\n`;
   const file = path.join(session, "instructions.md"),
     runner = config.runner || "pi";
@@ -210,7 +219,7 @@ export function prepare(
     thinking: runner === "pi" ? config.thinking || "" : "",
     mcps: profile?.summary.enabled_mcps || [],
     skills: [instruction, ...skills].map((p: string) => ({
-      path: path.relative(ROOT, p),
+      path: p,
       sha256: hash(fs.readFileSync(p)),
     })),
     prepared_at: new Date().toISOString(),
@@ -238,7 +247,7 @@ export function prepare(
     env,
     profile,
     manifest,
-    configuration_source: path.join(base, "factory.json"),
+    configuration_source: source || "built-in coordinator",
   };
 }
 export async function main(argv = process.argv.slice(2)) {
@@ -247,12 +256,14 @@ export async function main(argv = process.argv.slice(2)) {
     allowPositionals: true,
     options: {
       factory: { type: "string" },
+      project: { type: "string" },
       "instance-id": { type: "string" },
       "routing-identity": { type: "string" },
       "replace-participant": { type: "string" },
       loop: { type: "string" },
       "dry-run": { type: "boolean" },
       check: { type: "boolean" },
+      validate: { type: "boolean" },
       "check-factory": { type: "boolean" },
       help: { type: "boolean" },
     },
@@ -263,18 +274,21 @@ export async function main(argv = process.argv.slice(2)) {
     );
     return;
   }
+  if (values.project)
+    process.env.FACTORY_PROJECT = fs.realpathSync(values.project);
+  selectFactory(values.factory);
   if (
     [values.check, values["dry-run"], values["check-factory"]].filter(Boolean)
       .length > 1
   )
     throw new Error("Choose one inspection mode");
   if (values["check-factory"]) {
-    if (!values.factory || positionals.length)
-      throw new Error("--check-factory requires --factory only");
+    if (positionals.length)
+      throw new Error("--check-factory accepts no positionals");
     const members = [];
     for (const member of factoryDefinition(values.factory).agents) {
       try {
-        await main([member.name, "--factory", values.factory, "--check"]);
+        await main([member.name, "--check"]);
         members.push({ name: member.name, ready: true });
       } catch (error) {
         members.push({ name: member.name, ready: false, error: String(error) });
@@ -293,10 +307,13 @@ export async function main(argv = process.argv.slice(2)) {
   const [role, taskPath] = positionals;
   if (!role || positionals.length > 2)
     throw new Error("Specify role and optional task directory");
+  const selectedName = values.factory ? factoryDefinition().name : undefined;
   const task = taskPath ? readTask(taskPath) : undefined,
-    factory = task?.metadata.factory || values.factory;
+    factory = task?.metadata.factory || factoryDefinition().name;
+  if (task?.metadata.factory_config)
+    selectFactory(task.metadata.factory_config);
   if (!factory) throw new Error("Select --factory or an explicit task");
-  if (task && values.factory && values.factory !== factory)
+  if (task && selectedName && selectedName !== factory)
     throw new Error("--factory conflicts with task");
   if (
     !task &&
@@ -341,6 +358,7 @@ export async function main(argv = process.argv.slice(2)) {
         .replaceAll("{iterations}", String(loop))
         .replaceAll("{task_dir}", task.directory);
     }
+    if (values.validate) return;
     if (values["dry-run"]) {
       console.log(
         JSON.stringify(

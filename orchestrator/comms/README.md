@@ -6,7 +6,7 @@ SQLite is embedded in the comms process. One Compose file starts **two container
 
 ## Start with Docker Compose
 
-From `factory/orchestrator/comms`, or `.factory/orchestrator/comms` in an installed project:
+From `factory/orchestrator/comms`, or `$FACTORY_HOME/orchestrator/comms` in an installed project:
 
 ```bash
 docker-compose up --build -d
@@ -121,7 +121,7 @@ For retryable creation, messages, and events, preserve `request_key` across retr
 
 For example, ask a connected coordinator:
 
-> Read `.factory/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep the spec, plan, and review artifacts in the repository. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
+> Read `$FACTORY_HOME/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep the spec, plan, and review artifacts in the repository. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
 
 The orchestrator creates and retains the task ID, reuses the actual launcher registrations (or registers its own existing instance), creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents retrieve messages, acknowledge `read`, explicitly declare `exec` before acting, and publish assignment evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no agent scheduler. The [native Pi adapter](delivery.md) handles background inbox hints; other runners can implement its MCP contract.
 
@@ -206,7 +206,7 @@ Only the declared task owner records `resolve_attention`, using the current vers
 The Pi adapter provides a repeatable, explicit importer:
 
 ```sh
-node .factory/orchestrator/adapters/pi/import_usage.ts <task-directory> \
+node $FACTORY_HOME/orchestrator/adapters/pi/import_usage.ts <task-directory> \
   --session <private-runtime-instance/session.jsonl> \
   --participant <participant-id> --assignment <assignment-id>
 ```

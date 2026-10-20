@@ -19,7 +19,7 @@ Write the intended assignment as JSON in the task's documents, for example:
 From the coordinator's session, substitute actual paths and the active owner participant ID:
 
 ```sh
-node .factory/orchestrator/dispatch.ts <task-directory> \
+node $FACTORY_HOME/orchestrator/dispatch.ts <task-directory> \
   --request <assignment.json> --key design-1 --owner <owner-participant-id> \
   --direction right
 ```
@@ -30,7 +30,7 @@ The JSON receipt contains the host, pane (when applicable), actual participant, 
 
 ## Recovery
 
-Repeat the same command with the same `--key` and unchanged assignment. Receipts live under `FACTORY_RUNTIME_DIR/dispatch` (default `~/.factory/runtime/dispatch`), with a process lock per operation. Preserve these receipts until the task is complete. Do not delete one to force a retry or use a new key to bypass an uncertain result.
+Repeat the same command with the same `--key` and unchanged assignment. Receipts live under `FACTORY_RUNTIME_DIR/dispatch` (default `~/.factory/<project-name>-<path-hash>/runtime/dispatch`), with a process lock per operation. Preserve these receipts until the task is complete. Do not delete one to force a retry or use a new key to bypass an uncertain result.
 
 - **Lost pane-creation response:** inspect Herdr. If the new empty pane exists, retry with `--recover-pane <actual-id>`. This is explicit operator confirmation; the helper does not guess or split again.
 - **Lost launch response or startup failure:** the helper looks for the exact instance it launched. It never repeats the launch command. Inspect the visible pane and startup diagnostics. If that instance failed, reconcile it and authorize a fresh dispatch rather than assigning a stopped process.

@@ -1,6 +1,6 @@
 # Agent startup and configuration
 
-The configuration you edit is **`factories/<name>/factory.json`**. It contains shared defaults and member overrides, plus named providers, MCPs, extensions, and skill selections. The [factory reference](../docs/configuration.md) documents every field. Agent directories contain behavior and reusable resources, not competing configuration files.
+The configuration you edit is project **`factory.json`**, optionally extending an external team configuration. It contains shared defaults and member overrides, plus named providers, MCPs, extensions, and skill selections. The [factory reference](../docs/configuration.md) documents every field. Agent directories contain behavior and reusable resources, not competing configuration files.
 
 ## How configuration reaches Pi
 
@@ -24,9 +24,9 @@ Pi starts with PI_CODING_AGENT_DIR=<session>/pi
 and --append-system-prompt <session>/instructions.md
 ```
 
-The Pi translation and native startup checks live in [lib/pi.ts](lib/pi.ts). Each agent gets its own directory, model configuration, tools, and session transcript. Files are private launch output under `~/.factory/runtime`, or an absolute `FACTORY_RUNTIME_DIR`. **Do not edit generated files to configure future launches.** Change the factory file instead.
+The Pi translation and native startup checks live in [lib/pi.ts](lib/pi.ts). Each agent gets its own directory, model configuration, tools, and session transcript. Files are private launch output under `~/.factory/<project-name>-<path-hash>/runtime`, or an absolute `FACTORY_RUNTIME_DIR`. **Do not edit generated files to configure future launches.** Change the factory file instead.
 
-There are two configuration levels: factory defaults, then member overrides. Objects merge recursively; lists replace. Member resource selections replace their defaults. No agent-local `config.json`, native profile input, local overlay, or personal Pi configuration participates.
+There are two configuration levels: factory defaults, then member overrides. Objects merge recursively; lists replace. Member resource selections replace their defaults. Project overrides are merged before member settings are resolved. With no configuration file, the built-in coordinator uses native Pi provider/model defaults.
 
 The launcher appends the role instruction, selected factory recipe, and every selected skill entrypoint to the system instructions. Supporting documents retain their source directory for relative links. Raw provider/MCP configuration is not copied into model instructions.
 
@@ -44,12 +44,12 @@ The launcher appends the role instruction, selected factory recipe, and every se
 From the application root:
 
 ```bash
-.factory/orchestrator/start.sh --factory team
-node .factory/orchestrator/session.ts architect --factory team
-node .factory/orchestrator/session.ts builder <task-directory>
+$FACTORY_HOME/orchestrator/start.sh --factory /path/to/tools/factories/team/factory.json
+node $FACTORY_HOME/orchestrator/session.ts architect --factory /path/to/tools/factories/team/factory.json
+node $FACTORY_HOME/orchestrator/session.ts builder <task-directory>
 ```
 
-Without a task, `--factory` is required. With a task directory, its recorded factory is used; a conflicting `--factory` fails. No session selects the newest task automatically. Launch workers in their visible panes through [dispatch](references/dispatch.md), not in the coordinator's blocking shell.
+Without a task, project `factory.json` is used, or an explicit `--factory` path. With neither, only the built-in coordinator is available. With a task directory, its recorded factory is used; a conflicting `--factory` fails. No session selects the newest task automatically. Launch workers in their visible panes through [dispatch](references/dispatch.md), not in the coordinator's blocking shell.
 
 The coordinator entrypoint validates configuration before starting services. It starts local Compose and waits for MCP connectivity, supporting both `docker compose` and `docker-compose`. Set `FACTORY_COMMS_URL` to connect to an existing endpoint without managing Compose. `COMMS_PORT` selects the local port otherwise. Docker/Compose remains an explicit prerequisite.
 
@@ -57,14 +57,14 @@ Every prepared Pi profile loads the toolkit's native delivery extension. It poll
 
 Set `FACTORY_TERMINAL_HOST=herdr`, `terminal`, or `iterm`, or set `terminal_host` at the top of `factory.json`. The environment overrides configuration. The default is Herdr when `HERDR_ENV=1`, otherwise Terminal on macOS. Terminal and iTerm support is currently macOS-only. Other hosts can launch sessions manually. Terminal windows must already have credentials and service settings in their shell environment; the launcher does not copy secrets into command files. Live window/pane acceptance remains pending.
 
-`make -C .factory start FACTORY=team` is an equivalent coordinator shortcut.
+`make -C "$FACTORY_HOME" start PROJECT="$PWD"` is an equivalent coordinator shortcut.
 
 ## Preview and check
 
 ```bash
-node .factory/orchestrator/session.ts architect --factory team --dry-run
-node .factory/orchestrator/session.ts architect --factory team --check
-.factory/orchestrator/start.sh --check-factory --factory team
+node $FACTORY_HOME/orchestrator/session.ts architect --factory /path/to/tools/factories/team/factory.json --dry-run
+node $FACTORY_HOME/orchestrator/session.ts architect --factory /path/to/tools/factories/team/factory.json --check
+$FACTORY_HOME/orchestrator/start.sh --check-factory --factory /path/to/tools/factories/team/factory.json
 ```
 
 `--dry-run` writes nothing and does not connect or start an agent; a loop preview reads its task approvals. It reports the selected model, thinking, tools, MCP/extension names, instructions, and paths, excluding raw credentials and native provider settings.
@@ -79,7 +79,7 @@ Normal Pi startup runs the same checks, then starts interactive Pi in the applic
 
 Use environment references in factory provider definitions and MCP headers. Any illustrative endpoints/models in a tools repository must be replaced with usable values. Only selected MCPs are materialized; unselected services do not require credentials.
 
-Stdio MCPs run from the application root. A relative MCP `cwd` resolves from that root. For native Pi settings that refer to filesystem resources, use absolute paths; there is no authored native profile directory to copy. Git/registry extension sources remain native Pi package definitions.
+Stdio MCPs run from the application root. An explicit MCP `cwd` resolves from the file declaring it. For native Pi settings that refer to filesystem resources, use absolute paths; there is no authored native profile directory to copy. Git/registry extension sources remain native Pi package definitions.
 
 To reuse native authentication, set `auth_file_env` or `mcp_auth_file_env` to an environment variable holding an absolute private file path outside the toolkit. The launcher links that file into the generated profile, explicitly sharing refreshes. Otherwise newly written auth stays in the private session. The host environment is inherited; `env` supplements it rather than sandboxing it. `FACTORY_*`, `COMMS_AUTH_TOKEN`, and `PI_CODING_AGENT_DIR` cannot be remapped per member.
 
@@ -87,7 +87,7 @@ Enable a tool by defining/selecting its MCP in your factory and providing its de
 
 ## Task artifacts and recovery
 
-Comms owns task state, assignments, messages, decisions, and evidence. Local `.factory/tasks/<UTC-millisecond-timestamp>-<slug>/` directories contain documents and a `task.json` service link. Only documents declared in the selected factory's `artifacts` map are scaffolded; every task receives its pointer and reviews directory. Progress and reviews remain with the task.
+Comms owns task state, assignments, messages, decisions, and evidence. Project `<runtime_dir>/tasks/<UTC-millisecond-timestamp>-<slug>/` directories contain documents and a `task.json` service link. Only documents declared in the selected factory's `artifacts` map are scaffolded; every task receives its pointer and reviews directory. Progress and reviews remain with the task.
 
 Task-bound launches register the actual process instance and publish an immutable public session snapshot: runner, model, thinking, selected MCPs, instruction/skill hashes, and startup-check status. It does not fingerprint every provider option or credential. The extension records expiring native runner contact; `working` is host observation, not proof of progress.
 

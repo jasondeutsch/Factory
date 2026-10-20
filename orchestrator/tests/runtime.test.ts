@@ -82,7 +82,7 @@ test("task attachment is idempotent, preserves documents and records exact appro
     preview.skills.some((s: string) => s.endsWith("fixture-design/SKILL.md")),
   );
   assert.equal(preview.runner_configuration.thinking, "high");
-  assert.ok(!fs.existsSync(f.env.FACTORY_RUNTIME_DIR));
+  assert.ok(!fs.existsSync(path.join(f.env.FACTORY_RUNTIME_DIR, "sessions")));
   await assert.rejects(
     f.cli("orchestrator/session.ts", [
       "designer",
@@ -706,5 +706,152 @@ test("artifact scaffolding and loop guards follow configuration rather than fact
     assert.ok(preview.command.at(-1).startsWith("/review-loop 2 "));
   } finally {
     fs.writeFileSync(file, original);
+  }
+});
+
+test("project config composes external resources and routes artifacts outside the repository", async () => {
+  const projectFile = path.join(f.project, "factory.json");
+  const custom = path.join(f.root, "project-runs");
+  const skill = path.join(f.root, "project-skill");
+  fs.mkdirSync(skill);
+  fs.writeFileSync(path.join(skill, "SKILL.md"), "# Project-specific skill");
+  writeJSON(projectFile, {
+    extends: "../framework/factories/sample/factory.json",
+    runtime_dir: "../project-runs",
+    agents: [
+      {
+        name: "designer",
+        config: { model: "project-model" },
+        skills: ["../project-skill"],
+      },
+    ],
+  });
+  try {
+    const env = { FACTORY_RUNTIME_DIR: "" };
+    const preview = JSON.parse(
+      (await f.cli("orchestrator/session.ts", ["designer", "--dry-run"], env))
+        .stdout,
+    );
+    assert.equal(preview.cwd, f.project);
+    assert.equal(preview.runner_configuration.model, "project-model");
+    assert.equal(preview.runner_configuration.thinking, "high");
+    assert.deepEqual(preview.skills, [path.join(skill, "SKILL.md")]);
+    assert.ok(
+      preview.runner_configuration.runtime_dir.startsWith(custom + path.sep),
+    );
+    const directory = (
+      await f.cli(
+        "orchestrator/scripts/task.ts",
+        ["new", "--name", "External", "--brief", "Configuration test"],
+        env,
+      )
+    ).stdout.trim();
+    assert.equal(path.dirname(directory), path.join(custom, "tasks"));
+    assert.ok(fs.existsSync(path.join(directory, "spec.html")));
+    const worker = JSON.parse(
+      (
+        await f.cli(
+          "orchestrator/session.ts",
+          ["builder", directory, "--dry-run"],
+          env,
+        )
+      ).stdout,
+    );
+    assert.equal(worker.cwd, f.project);
+    assert.equal(worker.configuration_source, projectFile);
+    assert.deepEqual(fs.readdirSync(f.project), ["factory.json"]);
+    assert.ok(!fs.existsSync(path.join(custom, "sessions")));
+  } finally {
+    fs.rmSync(projectFile);
+  }
+});
+
+test("circular configuration inheritance fails before runtime writes", async () => {
+  const file = path.join(f.project, "factory.json");
+  writeJSON(file, { extends: "./factory.json" });
+  try {
+    await assert.rejects(
+      f.cli("orchestrator/session.ts", ["coordinator", "--dry-run"]),
+      /Circular factory extends/,
+    );
+  } finally {
+    fs.rmSync(file);
+  }
+});
+
+test("no project config can launch the built-in coordinator preview", async () => {
+  const preview = JSON.parse(
+    (await f.cli("orchestrator/session.ts", ["coordinator", "--dry-run"]))
+      .stdout,
+  );
+  assert.equal(preview.configuration_source, "built-in coordinator");
+  assert.equal(preview.cwd, f.project);
+  assert.ok(preview.instructions.includes("task-comms"));
+  assert.deepEqual(fs.readdirSync(f.project), []);
+});
+
+test("default runtime separates projects with identical names and --project selects the workspace", async () => {
+  const previews = [];
+  for (const parent of ["one", "two"]) {
+    const project = path.join(f.root, parent, "same-name");
+    fs.mkdirSync(project, { recursive: true });
+    const preview = JSON.parse(
+      (
+        await f.cli(
+          "orchestrator/session.ts",
+          ["coordinator", "--project", project, "--dry-run"],
+          { FACTORY_RUNTIME_DIR: "" },
+        )
+      ).stdout,
+    );
+    assert.equal(preview.cwd, project);
+    assert.match(
+      preview.runner_configuration.runtime_dir,
+      /\.factory\/same-name-[a-f0-9]{12}\/runtime\/sessions\//,
+    );
+    assert.deepEqual(fs.readdirSync(project), []);
+    previews.push(preview);
+  }
+  assert.notEqual(
+    previews[0].runner_configuration.runtime_dir.split("/sessions/")[0],
+    previews[1].runner_configuration.runtime_dir.split("/sessions/")[0],
+  );
+});
+
+test("an external command worker runs in the application with its resolved skills and runtime", async () => {
+  const bundle = path.join(f.root, "external-agent");
+  fs.mkdirSync(bundle);
+  fs.writeFileSync(path.join(bundle, "agent.md"), "# External worker");
+  const runner = path.join(bundle, "run.cjs");
+  fs.writeFileSync(
+    runner,
+    `const fs = require('node:fs'); console.log(JSON.stringify({ cwd: process.cwd(), instructions: fs.readFileSync(process.argv[2], 'utf8'), project: process.env.FACTORY_PROJECT, config: process.env.FACTORY_CONFIG, runtime: process.env.FACTORY_RUNTIME_DIR }));`,
+  );
+  const config = path.join(f.project, "factory.json");
+  writeJSON(config, {
+    name: "external",
+    agents: [
+      {
+        name: "worker",
+        path: "../external-agent",
+        config: {
+          runner: "command",
+          command: [process.execPath, runner, "{instructions_file}"],
+        },
+      },
+    ],
+  });
+  try {
+    const output = JSON.parse(
+      (await f.cli("orchestrator/session.ts", ["worker"])).stdout,
+    );
+    assert.equal(output.cwd, f.project);
+    assert.equal(output.project, f.project);
+    assert.equal(output.config, config);
+    assert.equal(output.runtime, f.env.FACTORY_RUNTIME_DIR);
+    assert.ok(output.instructions.includes("# External worker"));
+    assert.deepEqual(fs.readdirSync(f.project), ["factory.json"]);
+  } finally {
+    fs.rmSync(config);
   }
 });

@@ -18,7 +18,7 @@ For discoverable names, name the agents already running in your panes. The insta
 2. From the coordinator's Herdr pane, run `herdr agent list`. Read the actual pane IDs and identify the role sessions. Do not invent IDs from examples.
 3. Name a session with `herdr agent rename <actual-pane-id> account-architect`. A name must be unique among live agents.
 
-When a required role needs a new visible pane, use `herdr pane split --current --direction right --cwd "$PWD" --no-focus` from the project root. Use `down` when that gives more usable space and read `.result.pane.pane_id` from the response. Start the session with `herdr pane run <returned-id> <shell-quoted-launch-command>`, where the command runs `node .factory/orchestrator/session.ts <role> <actual-task-path>` from that project root. Quote each launcher argument and then the command as required by your shell tool; do not splice arbitrary user text into it. Do not start a second instance in an occupied pane or run the interactive launcher in the coordinator's own blocking shell tool.
+When a required role needs a new visible pane, use `herdr pane split --current --direction right --cwd "$PWD" --no-focus` from the project root. Use `down` when that gives more usable space and read `.result.pane.pane_id` from the response. Start the session with `herdr pane run <returned-id> <shell-quoted-launch-command>`, where the command runs `node $FACTORY_HOME/orchestrator/session.ts <role> <actual-task-path>` from that project root. Quote each launcher argument and then the command as required by your shell tool; do not splice arbitrary user text into it. Do not start a second instance in an occupied pane or run the interactive launcher in the coordinator's own blocking shell tool.
 
 Inspect the pane to establish whether startup succeeded before assigning work. The launcher first prepares the native profile and checks credential readiness and enabled MCP connections. Required environment references must exist in that pane; do not assume it matches every coordinator subprocess. If startup fails, inspect the task event and private diagnostics, explain the actual error without credentials, and request only the needed correction. Never claim an agent is ready merely because its command was submitted or preflight passed.
 
@@ -51,7 +51,7 @@ Use the [fallback bridge setup](../../comms/herdr-delivery.md) to capture each l
 When no bound background bridge is running, notify after saving an assignment, peer message, or result. Run this from a Herdr-managed pane, using the actual service task ID, routing identity, and live agent name:
 
 ```bash
-.factory/orchestrator/start-delivery.sh --project "$PWD" --task <comms-task-id> \
+$FACTORY_HOME/orchestrator/start-delivery.sh --project "$PWD" --task <comms-task-id> \
   --notify <recipient-routing-identity> --agent <actual-live-agent-name>
 ```
 

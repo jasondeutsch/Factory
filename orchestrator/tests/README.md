@@ -33,3 +33,5 @@ Use a disposable project and an installed factory, with a human present. Keep pr
 8. Give direct feedback in a worker session. Verify consequential feedback reaches the coordinator.
 
 Retain IDs, timestamps, actual interventions, runtime versions, errors and recovery duration. Human approval stays with the user unless explicitly delegated. Do not compensate for a broken handoff by doing the agent's work yourself. Record automated checks and live observations separately.
+
+The integration harness keeps the framework checkout outside the application. Tools tests also use a separate tools directory. Runtime tests cover project `factory.json` inheritance, member overrides, external skills, task storage, a command-worker launch, cyclic inheritance rejection, and project-specific default runtime paths. Tests assert that no toolkit or task artifacts are created in the application.

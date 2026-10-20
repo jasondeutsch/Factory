@@ -3,7 +3,8 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { Comms, type RecordValue } from "../lib/client.ts";
 import {
-  ROOT,
+  tasksRoot,
+  selectFactory,
   cli,
   isMain,
   projectRoot,
@@ -44,7 +45,7 @@ export async function attachRecord(
       })),
     },
   });
-  const root = path.join(ROOT, "tasks");
+  const root = tasksRoot();
   fs.mkdirSync(root, { recursive: true });
   return locked(path.join(root, ".attach.lock"), async () => {
     let target: string | undefined;
@@ -85,10 +86,7 @@ export async function attachRecord(
         for (const [document, templatePath] of Object.entries(
           definition.artifacts || {},
         )) {
-          const template = fs.readFileSync(
-            path.resolve(ROOT, "factories", factory, templatePath as string),
-            "utf8",
-          );
+          const template = fs.readFileSync(templatePath as string, "utf8");
           const text = template.replace(
             /\$\$|\$\{?([a-zA-Z_][a-zA-Z_0-9]*)\}?/g,
             (match, key) => {
@@ -107,6 +105,7 @@ export async function attachRecord(
           project: record.project,
           name: record.name,
           factory,
+          factory_config: process.env.FACTORY_CONFIG,
           brief: record.brief,
           owner: record.owner,
           created_at: record.created_at,
@@ -143,6 +142,7 @@ export async function main(args = process.argv.slice(2)) {
     allowPositionals: true,
     options: {
       factory: { type: "string" },
+      project: { type: "string" },
       name: { type: "string" },
       brief: { type: "string" },
       "brief-file": { type: "string" },
@@ -161,6 +161,8 @@ export async function main(args = process.argv.slice(2)) {
       artifact: { type: "string", multiple: true },
     },
   });
+  if (v.project) process.env.FACTORY_PROJECT = fs.realpathSync(v.project);
+  selectFactory(v.factory);
   const input = (field: "text" | "brief") => {
     const file = v[`${field}-file`];
     if (file && v[field]) throw new Error("Choose text or file");
@@ -173,8 +175,7 @@ export async function main(args = process.argv.slice(2)) {
   const client = new Comms();
   try {
     if (p[0] === "new") {
-      if (!v.factory || !v.name?.trim())
-        throw new Error("new requires --factory and --name");
+      if (!v.name?.trim()) throw new Error("new requires --name");
       const def = factoryDefinition(v.factory);
       const record = await client.call("create_task", {
         project: projectRoot(),
@@ -183,17 +184,16 @@ export async function main(args = process.argv.slice(2)) {
         owner: def.owner,
         request_key: v["request-key"] || id(),
       });
-      console.log(await attachRecord(client, record, v.factory));
+      console.log(await attachRecord(client, record, def.name));
       return;
     }
     if (p[0] === "attach") {
-      if (!p[1] || !v.factory)
-        throw new Error("attach <task-id> --factory required");
+      if (!p[1]) throw new Error("attach <task-id> required");
       console.log(
         await attachRecord(
           client,
           await client.call("get_task", { task_id: p[1] }),
-          v.factory,
+          factoryDefinition().name,
         ),
       );
       return;

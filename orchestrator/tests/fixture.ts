@@ -14,18 +14,19 @@ export async function fixture(contentRoot?: string) {
     fs.mkdtempSync(path.join(os.tmpdir(), "factory-test-")),
   );
   const project = path.join(root, "project"),
-    toolkit = path.join(project, ".factory");
+    toolkit = path.join(root, "framework");
   fs.mkdirSync(project);
   fs.cpSync(ROOT, toolkit, {
     recursive: true,
     filter: (source) =>
       !["node_modules", ".git", "__pycache__"].includes(path.basename(source)),
   });
+  const content = contentRoot ? path.join(root, "tools") : toolkit;
   if (contentRoot) {
     for (const directory of ["factories", "agents", "skills"])
       fs.cpSync(
         path.join(contentRoot, directory),
-        path.join(toolkit, directory),
+        path.join(content, directory),
         { recursive: true },
       );
   } else seedConfigurations(toolkit);
@@ -49,6 +50,9 @@ export async function fixture(contentRoot?: string) {
     FACTORY_COMMS_URL: `http://127.0.0.1:${port}/mcp`,
     COMMS_AUTH_TOKEN: "fixture-only",
     FACTORY_RUNTIME_DIR: path.join(root, "runtime"),
+    FACTORY_HOME: toolkit,
+    FACTORY_PROJECT: project,
+    FACTORY_CONFIG: "",
     FACTORY_TEST_PROJECT: project,
     FACTORY_TEST_TOOLKIT: toolkit,
   };
@@ -69,15 +73,26 @@ export async function fixture(contentRoot?: string) {
     root,
     project,
     toolkit,
+    content,
     env,
     client,
     async cli(file: string, args: string[], overrides: NodeJS.ProcessEnv = {}) {
-      return execute(process.execPath, [path.join(toolkit, file), ...args], {
-        cwd: project,
-        env: { ...env, ...overrides },
-        timeout: 20000,
-        maxBuffer: 4 * 1024 * 1024,
-      });
+      const resolvedArgs = args.map((arg, index) =>
+        args[index - 1] === "--factory" &&
+        ["sample", "minimal", "golang", "writing"].includes(arg)
+          ? path.join(content, "factories", arg, "factory.json")
+          : arg,
+      );
+      return execute(
+        process.execPath,
+        [path.join(toolkit, file), ...resolvedArgs],
+        {
+          cwd: project,
+          env: { ...env, ...overrides },
+          timeout: 20000,
+          maxBuffer: 4 * 1024 * 1024,
+        },
+      );
     },
     async close() {
       await client.close();

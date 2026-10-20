@@ -9,6 +9,7 @@ import {
   readTask,
   remoteTask,
   factoryDefinition,
+  selectFactory,
   configuration,
   strings,
   hash,
@@ -43,8 +44,9 @@ export async function main(argv = process.argv.slice(2)) {
   const timeout = Number(v.timeout);
   if (!(timeout > 0 && timeout <= 300))
     throw new Error("Timeout must be 1–300 seconds");
-  const task = readTask(positionals[0]),
-    definition = factoryDefinition(task.metadata.factory),
+  const task = readTask(positionals[0]);
+  selectFactory(task.metadata.factory_config);
+  const definition = factoryDefinition(task.metadata.factory),
     request = json(v.request);
   for (const field of ["role", "title", "instructions", "stage"])
     if (typeof request[field] !== "string" || !request[field].trim())
@@ -168,6 +170,8 @@ export async function main(argv = process.argv.slice(2)) {
                 [
                   process.execPath,
                   path.join(ROOT, "orchestrator/session.ts"),
+                  "--factory",
+                  task.metadata.factory_config || task.metadata.factory,
                   request.role,
                   task.directory,
                   "--instance-id",

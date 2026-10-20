@@ -1,8 +1,35 @@
 # Configure a factory
 
-**Edit one file: `factories/<name>/factory.json`.** It declares the members, execution defaults, provider endpoints, MCP servers, extensions, and skill selections. Agent directories contain instructions, skills, scripts, and a thin `start.sh`; they contain no independent execution configuration.
+Project `factory.json` is optional. Launch from the application root; Factory and tools remain in external checkouts. A project can extend a team configuration and override only its differences.
 
-Factory configurations are supplied by your team or a separate tools repository. The framework does not ship any runnable factories. Paths below refer to the combined project `.factory/` installation.
+```json
+{
+  "extends": "../tools/factories/golang/factory.json",
+  "runtime_dir": "~/factory-runs/my-project",
+  "agents": [
+    { "name": "architect", "config": { "thinking": "high" } }
+  ]
+}
+```
+
+`extends` accepts one local JSON file or directory containing `factory.json`; cycles fail before launch. Nested objects merge, members merge by `name`, and other arrays replace. Workers can be added by name with their own `path`, configuration and resources. To replace the entire team, use a standalone configuration instead of extending one.
+
+Paths resolve from the file that declares them before inheritance is merged. Absolute paths and `~/` work too. `@factory/` points to the framework checkout. This applies to agent paths, skills, templates, recipes, runtime directories, MCP working directories and relative executable/extension paths. MCPs without an explicit `cwd` run in the application root. Command-runner argv remains literal except for documented placeholders.
+
+A standalone configuration includes the built-in coordinator and Comms catalog by default. Without any file, the coordinator uses native Pi provider/model defaults; no workers or recipe are assumed. Explicit configurations do not inherit personal Pi settings. Native authentication still requires environment credentials or the configured private auth-file reference.
+
+To add a worker from another checkout, include a new member in the project's `agents` array:
+
+```json
+{
+  "name": "security_reviewer",
+  "path": "../team-agents/security-reviewer",
+  "skills": ["@factory/orchestrator/comms/skills/task-comms", "../team-skills/security"],
+  "config": { "thinking": "high", "tools": ["read", "bash", "grep", "find", "ls"] }
+}
+```
+
+The bundle contains `agent.md`. Its provider/model and selected MCPs inherit the factory defaults unless overridden. MCP definitions and extension packages remain named catalogs; declaring a tool does not automatically enable it for every worker.
 
 ## Shared defaults and member overrides
 
@@ -14,22 +41,25 @@ Member `skills`, `mcps`, and `extensions` select resources. If omitted, their de
 
 | Factory field | Meaning |
 | --- | --- |
-| `name` | Identifier matching its directory under `factories/`. |
+| `name` | Logical identifier; independent of directory or filename. |
+| `extends` | Optional local base configuration path. |
+| `recipe` | Optional Markdown instructions file loaded into every selected session. |
+| `runtime_dir` | Optional project runtime directory. Default: `~/.factory/<project-name>-<path-hash>/runtime`. `FACTORY_RUNTIME_DIR` overrides it. |
 | `owner` | Member responsible for task coordination. |
 | `terminal_host` | Optional `herdr`, `terminal`, or `iterm`. `FACTORY_TERMINAL_HOST` overrides this; automatic selection uses Herdr when inside it, otherwise Terminal on macOS. |
 | `defaults` | Shared execution settings and optional resource selections. |
 | `providers` | Named custom provider definitions in Pi's native provider format. Built-in providers need no entry. |
 | `mcps` | Named native MCP server definitions. Declaring one does not enable it for every agent. |
-| `extensions` | Named Pi package sources or package objects. Only selected packages are installed/loaded. The local Factory delivery extension is always loaded for Pi. |
+| `extensions` | Named Pi package objects with a `source` field. Only selected packages are installed/loaded. The local Factory delivery extension is always loaded for Pi. |
 | `artifacts` | Optional mapping of output HTML filenames to template paths relative to this factory file. Empty/omitted means no starter documents. |
 | `agents` | Members, paths, selections, overrides, and optional handoff requirements. |
 
 | Member field | Meaning |
 | --- | --- |
 | `name` | Unique role name used for launch and communication. |
-| `path` | Directory containing `agent.md`, or `SKILL.md` for the coordinator. Relative to this factory file, inside the toolkit. |
+| `path` | Directory containing `agent.md`, or `SKILL.md` for the coordinator. Relative to its declaring file, or absolute. |
 | `config` | Optional execution overrides, using the fields below. |
-| `skills` | Paths to skill directories or entrypoint files, relative to this factory file, inside the toolkit. Include the shared task-comms skill. |
+| `skills` | Paths to skill directories or entrypoint files, relative to its declaring file, or absolute. Include the shared task-comms skill. |
 | `mcps` | Names from the factory's `mcps` map. |
 | `extensions` | Names from the factory's `extensions` map. |
 | `handoff` | Assignment evidence defaults; see [dispatch](../orchestrator/references/dispatch.md). |
@@ -72,15 +102,15 @@ Comms is shared infrastructure: `FACTORY_COMMS_URL` and `COMMS_AUTH_TOKEN` are t
 
 ## Start and inspect
 
-From an application containing `.factory/`:
+From the application root, with `FACTORY_HOME` pointing to the framework checkout:
 
 ```bash
-.factory/orchestrator/start.sh --factory team
-node .factory/orchestrator/session.ts architect --factory team --dry-run
-node .factory/orchestrator/session.ts builder <task-directory>
+"$FACTORY_HOME/orchestrator/start.sh"
+node "$FACTORY_HOME/orchestrator/session.ts" architect --dry-run
+node "$FACTORY_HOME/orchestrator/session.ts" builder <task-directory>
 ```
 
-`--factory` is required unless an explicit task selects its recorded factory. There is no global coordinator profile or automatic newest-task selection. A conflicting factory/task pair fails.
+Project `factory.json` is selected automatically. `--factory /path/to/factory.json` selects an external configuration instead. `--project /path/to/application` selects an explicit application root. A task records its configuration source for worker launches. There is no global coordinator profile or automatic newest-task selection. A conflicting factory/task pair fails.
 
 `--dry-run` shows the resolved model, thinking, tools, MCP/extension names, skills, and command without writing files or starting an agent. Raw provider configuration and credential values are excluded. `--check` prepares private native files and checks credentials/MCPs without model inference; comms must already be available.
 
@@ -90,7 +120,7 @@ See [how the configuration reaches Pi](../orchestrator/README.md#how-configurati
 
 A team may provide a Makefile with `install` and `update` for its tools. The framework Makefile installs shared runtime dependencies only. No installer schema or package ecosystem is introduced. Install affects the host, not an isolated toolchain.
 
-Edit the recipe in `README.md` for workflow agreements and `factory.json` for execution. Team-owned factories survive [toolkit updates](toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
+Edit the recipe in `README.md` for workflow agreements and `factory.json` for execution. Framework and team checkouts are [updated independently](toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
 
 ## Task document templates
 
@@ -101,7 +131,7 @@ Edit the recipe in `README.md` for workflow agreements and `factory.json` for ex
 }
 ```
 
-`task.ts attach` creates these documents once. Templates support `$title`, `$brief`, `${title}`, `${brief}`, and `$$` for a literal dollar sign; inserted values are HTML-escaped. Output names must be plain HTML filenames, and templates must resolve to files inside `.factory/`. Task pointers and the reviews directory are framework bookkeeping. Reattaching preserves existing document content. A factory with no artifacts gets no spec or plan implicitly.
+`task.ts attach` creates these documents once. Templates support `$title`, `$brief`, `${title}`, `${brief}`, and `$$` for a literal dollar sign; inserted values are HTML-escaped. Output names must be plain HTML filenames, and templates must resolve to existing files. Task pointers and the reviews directory are framework bookkeeping. Reattaching preserves existing document content. A factory with no artifacts gets no spec or plan implicitly.
 
 ## Optional Pi loop launch
 
@@ -116,3 +146,7 @@ A member may set this in `config` (or inherit it from `defaults`):
 ```
 
 `--loop N` requires an explicit task, a Pi runner, positive iterations, configured loop settings, and current hash-matching approval of every listed artifact. Those artifacts must exist in the factory's `artifacts` map. The launcher checks the named native commands and waits for an assignment before starting; it substitutes `{iterations}` and `{task_dir}` in the prompt. The selected extension defines actual iteration behavior. No factory or member name activates a loop automatically. This is a launch guard, not a workflow scheduler or a continuous approval monitor.
+
+## Runtime ownership
+
+Tasks live in `<runtime_dir>/tasks/`; sessions, dispatch receipts and diagnostics live in sibling directories. Project identity uses the canonical application path, so projects with the same name remain separate. Use a distinct runtime directory per project when overriding the default. Task pointers validate project identity before use. Comms SQLite storage remains controlled by Compose volumes, independently of this setting.
