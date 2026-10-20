@@ -2,7 +2,7 @@
 
 Pi uses native inbox delivery. Use [dispatch](../../references/dispatch.md) for visible panes. The binding and notification operations below are optional fallbacks for runners without a native adapter; do not add them to Pi sessions.
 
-This reference is for the coordinating agent. For coordinated factory work, open or reuse visible role sessions as needed; handle pane controls and helper calls on the user's behalf. The default is ordinary interactive sessions, each in a pane. No extension or MCP server is required. Only control Herdr from a Herdr-managed pane (`HERDR_ENV=1`). Outside Herdr, explain that the user must open their coordinating session there first; do not operate another focused session implicitly.
+This reference is for the coordinating agent. For coordinated factory work, open or reuse visible role sessions as needed; handle pane controls and helper calls on the user's behalf. The default is ordinary interactive sessions, each in a pane. Herdr pane controls themselves need no extension or MCP server; Factory task coordination still requires Comms. Only control Herdr from a Herdr-managed pane (`HERDR_ENV=1`). Outside Herdr, explain that the user must open their coordinating session there first; do not operate another focused session implicitly.
 
 For normal coordinator dispatch, use the [single dispatch operation](../../references/dispatch.md). The manual controls below remain useful for inspection and explicit recovery.
 
@@ -26,7 +26,7 @@ For a coder loop, add `--loop 5` to its pane launch. After checks, the launcher 
 
 Name live sessions distinctly, such as `account-architect` and `account-coordinator`. Record the mapping in the task with `task.ts note`. Herdr names have their own syntax and length rules; they are not the task's display name.
 
-Create canonical work with comms `create_assignment` using the registered participant IDs. It saves the assignment notification and event atomically; do not create another assignment message with a shell helper. After storage, notify the actual live session:
+Create canonical work with comms `create_assignment` using the registered participant IDs. It saves the assignment notification and event atomically; do not create another assignment message with a shell helper. For a runner using the terminal fallback, notify the actual live session after storage. Pi’s native adapter handles this automatically:
 
 Use the [one-shot notification operation](#one-shot-inbox-notification) below so delivery claims prevent duplicate input.
 

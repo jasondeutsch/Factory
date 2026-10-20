@@ -8,7 +8,7 @@ Establish task/project, role, instance ID, and routing identity from the orchest
 
 Read `list_participants` pages for assigned contacts. Distinguish role, routing identity, participant ID, and optional actual host reference. Retired registrations are historical; registration is not live availability or authentication. Ask the orchestrator about unknown/unreachable peers. Multiple instances of a role need distinct active inbox identities.
 
-Replacement is explicit via `replaces_participant_id`, using a new instance ID with the same role and routing identity. It retires the old registration without inheriting its assignments. The orchestrator cancels obsolete assignments and creates follow-up work deliberately. Do not bypass instance checks by impersonating a previous worker.
+Replacement is explicit via `replaces_participant_id`, using a new instance ID with the same role and routing identity. It retires the old registration without inheriting its assignments. The orchestrator inspects `get_recovery_plan` and explicitly cancels or reassigns outstanding work with `recover_assignment` after confirming the old process stopped. Do not bypass instance checks by impersonating a previous worker.
 
 ## Canonical assignment operations
 

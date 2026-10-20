@@ -154,7 +154,7 @@ Offer a factory-wide check using the existing member startup checks. Report read
 
 **Status:** Implemented
 
-A read-only auto-refreshing task page and `get_task_status` share the same records. Immutable public factory membership distinguishes configured members from actual instances. Assignment edges show recorded dispatches; contact, work state, messages and results remain distinct. No Go-specific members or planned graph are hardcoded.
+A read-only auto-refreshing task page and `get_task_status` share the same records. Immutable public factory membership distinguishes configured members from actual instances. Assignment edges show recorded dispatches; contact, work state, messages and results remain distinct. No Go-specific members or planned graph are hardcoded. A terminal monitor now provides project/task navigation, attention, contact, observed message routes and sent/read/exec states using the same read-only endpoints; it refreshes every three seconds and flags stale data.
 
 ## FACT-009 — Actionable coordinator inbox
 
@@ -184,7 +184,7 @@ An explicit recovery plan precedes owner-only cancellation or atomic reassignmen
 
 **Status:** Implemented
 
-A preview-first copy updater records managed file hashes and refuses conflicting upstream/local edits. Team factories are seeded once, then remain team-owned. Local overrides, task/runtime data and credentials are excluded. No upstream directory, registry, dependency resolver or package ecosystem is introduced.
+A preview-first copy updater records managed file hashes and refuses conflicting upstream/local edits. The copier remains optional for separately maintained copies. Normal setup now uses independent framework and tools checkouts, with project `factory.json` overrides; no copy into the application is needed. Local overrides, task/runtime data and credentials are excluded. No upstream directory, registry, dependency resolver or package ecosystem is introduced.
 
 ## FACT-014 — Coordinated startup
 

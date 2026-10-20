@@ -21,13 +21,13 @@ Keep the returned participant `id`. A role describes responsibility; a routing i
 
 The task owner also registers a participant. Its `routing_identity` must equal `get_task.owner` (normally `coordinator`, or `pair_writer` for writing). Only that active declared owner can create or cancel assignments. Workers do not create downstream assignments or approve work merely by submitting a result.
 
-Factory launchers supply `FACTORY_INSTANCE_ID` and an `Instance ID` instruction. The ID remains available through runner-managed context resets; do not generate a new registration every turn. Other hosts supply an equivalent stable instance reference. An unassigned session registers after a task is selected. `list_participants` returns registration facts, including retired instances, **not live availability**. There is no heartbeat or presence monitor yet.
+Factory launchers supply `FACTORY_INSTANCE_ID` and an `Instance ID` instruction. The ID remains available through runner-managed context resets; do not generate a new registration every turn. Other hosts supply an equivalent stable instance reference. An unassigned session registers after a task is selected. `list_participants` returns registration facts, including retired instances, **not live availability**. Use `get_session` for the recorded configuration and expiring native/host contact. Contact is separate from assignment progress; expired contact is unknown, not proof of a stopped process.
 
 ### Host binding for an existing instance
 
 After a running agent has a captured host reference, call `bind_participant` with `task_id`, `participant_id`, `actor_participant_id`, `expected_session_ref`, `session_ref`, and `request_key`. The actor must be that participant or the active task owner. Use the current reference from `list_participants` (an empty string when absent) as the expected value. Stale updates fail, and retries with the original key replay the original response.
 
-This attaches or clears delivery information without retiring the instance or changing its assignments. It does not verify the host reference or establish liveness. Use replacement for a different process; use binding to enable delivery to the existing one. See [Herdr binding setup](delivery.md#setup-through-the-coordinator).
+This attaches or clears delivery information without retiring the instance or changing its assignments. It does not verify the host reference or establish liveness. Use replacement for a different process; use binding to enable delivery to the existing one. See [Herdr binding setup](herdr-delivery.md#setup-through-the-coordinator).
 
 ### Replacement
 
@@ -133,9 +133,9 @@ On a stale update, fetch current state and reconcile before issuing a new mutati
 
 Current task status remains independently owned by the orchestrator. Existing messages, acknowledgement semantics, approval events, and usage measurements remain available. Do not manually duplicate canonical assignment operations as generic messages/events. Peer conversation, individual checks, approval decisions, and measured usage still use their existing tools.
 
-Startup upgrades schema 1 to schema 2 transactionally, preserving tasks, messages, events and usage. Schema 2 adds coordination tables and optional `messages.assignment_id`. No legacy prose assignment is automatically promoted into canonical ownership. Use a newly created structured assignment when continuing such work. An older binary that only supports schema 1 cannot reopen the upgraded database.
+The service initializes or upgrades its supported SQLite schema transactionally, preserving recorded evidence. See [service configuration](README.md#configuration-and-development) for the current schema. Stored conversation is not automatically converted into assignments.
 
-Rebuild/restart the comms deployment to expose the new tools, and reconnect existing clients. Preserve container-local data before recreating an unmounted container; use the existing opt-in volume when persistence is wanted. Source file edits do not update an already-running container or a session's loaded skill snapshot. No automatic delivery bridge or live contact collection is included in this feature.
+Rebuild/restart Comms after source updates and reconnect clients. The supplied Compose volume preserves the database across container replacement; `down -v` deletes it. Existing sessions retain their loaded skill snapshot. Native delivery and expiring contact are supplied by the [runner adapter](delivery.md), with an optional Herdr fallback for other runners.
 
 ## Recover stopped work
 
@@ -143,6 +143,6 @@ Rebuild/restart the comms deployment to expose the new tools, and reconnect exis
 2. Stop the old process using its native host controls. Register and bind the actual replacement instance; do not invent a placeholder or reuse the stopped instance's identity.
 3. The owner calls `recover_assignment` with the current assignment version, reason, stable request key, and `action: reassign`. Supply the replacement participant ID and `previous_session_stopped: true` only after that confirmation. For cancellation alone use `action: cancel`.
 4. Inspect the receipt. Cancellation and the linked replacement assignment occur in one transaction. A retry returns that same receipt. The previous summary/evidence remains intact; the replacement gets the original instructions/requirements and a reference to prior work, not a fabricated completed result.
-5. Notify the bound replacement through the delivery bridge. Resolve related attention items after reconciliation. Recovery does not start/stop panes, approve work, transfer participant identity, or silently close pending decisions.
+5. Use the replacement’s configured delivery adapter; Pi receives the saved notification through its native extension. Resolve related attention items after reconciliation. Recovery does not start/stop panes, approve work, transfer participant identity, or silently close pending decisions.
 
 Terminal assignments cannot be recovered this way; create an explicit new assignment when revisiting submitted or already-cancelled work. The declared owner can cancel a retired participant's outstanding assignment. All identity and stopped-process assertions are declared by the caller, not authenticated host proofs.

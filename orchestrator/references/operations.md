@@ -8,7 +8,7 @@ The supplied coordinator entrypoint starts local Compose; each Pi session handle
 
 An existing coordinator or writer needs its runner's native MCP connection configured and reloaded; reading a skill does not register tools. No second coordinator process is needed. To start one intentionally, use `$FACTORY_HOME/orchestrator/start.sh --factory <configuration-file>` without a task; it loads its configuration and skills before taking your request. Do not launch workers until the service and selected model/provider are usable.
 
-Create a task through `create_task` with the user's brief, explicit project, owner, and a stable request key. Read `owner` from the selected `factory.json`; there is no framework default task owner. Preserve the returned ID. Create its client-managed artifact directory:
+Create a task through `create_task` with the user's brief, explicit project, owner, and a stable request key. Read `owner` from the resolved factory configuration; the built-in default is `coordinator`. Preserve the returned ID. Create its client-managed artifact directory:
 
 ```bash
 node $FACTORY_HOME/orchestrator/scripts/task.ts attach <comms-task-id> --factory <configuration-file>
@@ -30,7 +30,7 @@ Read `cwd`, instructions, and `runner_configuration`. Configure per-member provi
 
 `--check` prepares a private native profile, reads task state, checks credentials and enabled MCP connections, and verifies extension command registration. It does not call a model. It can start MCP processes, contact services, or install the selected extension packages. Live launch performs these checks automatically. Failures remain visible through stderr and private diagnostics, with a comms failure event when possible. If the service itself is down, no remote event can be recorded; do not hide the original error.
 
-Open or reuse a visible session through [dispatch](dispatch.md) using the configured terminal host, then run that role's `start.sh <artifact-directory>` **in that pane**. All role scripts use the shared session launcher. Do not run an interactive launcher in the coordinator's blocking shell or replace an occupied agent. Record actual live names and pane IDs with `record_event` so peers can notify one another. Do not guess IDs.
+Use [dispatch](dispatch.md) to open or reuse a visible managed session and assign work. Dispatch invokes `session.ts`; do not start a second process afterward. For manual launch, run `node "$FACTORY_HOME/orchestrator/session.ts" <member> <artifact-directory>` in an available visible pane. Factory prepares the profile and calls the configured independent entrypoint. Do not run an interactive launcher in the coordinator's blocking shell or replace an occupied agent. Record actual live names and pane IDs with `record_event` so peers can notify one another. Do not guess IDs.
 
 The launcher supplies project, role, artifact directory, and comms task ID in its instructions/environment. Each member should select the skill directly from `orchestrator/comms/skills/task-comms`; Pi gets the matching MCP endpoint and optional token reference. Native profiles and transcripts live under `~/.factory/<project-name>-<path-hash>/runtime/`. Authored profiles and global Pi settings are not rewritten. Non-Pi command adapters must configure their runner's MCP connection separately. See [session configuration](../README.md).
 

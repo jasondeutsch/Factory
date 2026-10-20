@@ -60,7 +60,7 @@ The prepared Pi coordinator includes automatic inbox delivery. An existing sessi
 
 ### Observe either mode
 
-Open [the task monitor](http://127.0.0.1:8090/monitor), select the project, then its task. It shows recorded assignments, participants, messages and attention items. Port 8091 is the SQLite administration panel, not the workflow monitor. You can also ask the coordinating agent for status. Both modes keep Factory artifacts under the configured runtime directory and use the same Comms records.
+Run `"$FACTORY_HOME/orchestrator/monitor.sh"` from the application root for the terminal monitor, or open [the browser monitor](http://127.0.0.1:8090/monitor) and select the project and task. The terminal client requires Go 1.26+ or a prebuilt monitor executable, and an already running Comms service. See [controls and connection settings](comms/README.md#terminal-monitor). It shows recorded assignments, participants, messages and attention items. Port 8091 is the SQLite administration panel, not the workflow monitor. You can also ask the coordinating agent for status. Both modes keep Factory artifacts under the configured runtime directory and use the same Comms records.
 
 ## How configuration reaches Pi
 

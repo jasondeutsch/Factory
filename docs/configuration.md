@@ -33,7 +33,7 @@ The bundle contains `agent.md`. Its provider/model and selected MCPs inherit the
 
 ## Shared defaults and member overrides
 
-A factory's `defaults` apply to all its members. A member's `config` overrides only what differs. Objects merge recursively; lists and scalar values replace. There are no global model settings, agent-local overrides, or native profile files to edit.
+A factory's `defaults` apply to all its members. A member's `config` overrides only what differs. Objects merge recursively; lists and scalar values replace. For managed launches, edit this resolved factory configuration rather than generated native profiles or standalone agent settings.
 
 For example, put your provider/model in `defaults` once. Give the architect `"config": {"model": "reasoning-model", "thinking": "high"}` when it needs another model. Add that model to the selected custom provider's `models` list. A member with no `config` uses the defaults; it does not need an empty object.
 
@@ -45,7 +45,7 @@ Member `skills`, `mcps`, and `extensions` select resources. If omitted, their de
 | `extends` | Optional local base configuration path. |
 | `recipe` | Optional Markdown instructions file loaded into every selected session. |
 | `runtime_dir` | Optional project runtime directory. Default: `~/.factory/<project-name>-<path-hash>/runtime`. `FACTORY_RUNTIME_DIR` overrides it. |
-| `owner` | Member responsible for task coordination. |
+| `owner` | Member responsible for task coordination; defaults to `coordinator`. |
 | `terminal_host` | Optional `herdr`, `terminal`, or `iterm`. `FACTORY_TERMINAL_HOST` overrides this; automatic selection uses Herdr when inside it, otherwise Terminal on macOS. |
 | `defaults` | Shared execution settings and optional resource selections. |
 | `providers` | Named custom provider definitions in Pi's native provider format. Built-in providers need no entry. |
@@ -121,7 +121,7 @@ See [how the configuration reaches Pi](../orchestrator/README.md#how-configurati
 
 A team may provide a Makefile with `install` and `update` for its tools. The framework Makefile installs shared runtime dependencies only. No installer schema or package ecosystem is introduced. Install affects the host, not an isolated toolchain.
 
-Edit the recipe in `README.md` for workflow agreements and `factory.json` for execution. Framework and team checkouts are [updated independently](toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
+Edit the file selected by `recipe` for workflow agreements and `factory.json` for execution. Framework and team checkouts are [updated independently](toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
 
 ## Task document templates
 

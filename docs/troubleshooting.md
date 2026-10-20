@@ -10,7 +10,7 @@ Users can ask their coordinator to configure or repair the setup. The diagnostic
 | Node.js 22.18+ | Task and session helpers. | Install Node and run `npm ci --omit=dev` in the toolkit for its SDK/runtime dependencies. |
 | Pi with the native configuration, auth, MCP, and extension commands used here | New sessions using the provided Pi adapter. | No; an installed runner is required. Another CLI needs an explicit command adapter. |
 | Selected provider, actual model ID, and credentials | Each new configured model session. | No; replace the clearly labeled gateway/model examples in the factory defaults/provider definitions and any member overrides. |
-| Go 1.26 | Build/run the optional host delivery bridge (a built binary avoids the runtime toolchain). | No, unless running the bridge from source. |
+| Go 1.26 | Build/run the terminal monitor or optional host delivery bridge; also needed for development. | No. A prebuilt executable avoids the runtime toolchain; source launchers use vendored dependencies. |
 | Herdr or macOS Terminal/iTerm | Automated visible agent sessions. | Select with `FACTORY_TERMINAL_HOST`; manual startup remains possible elsewhere. |
 | Dependencies selected by your factory | Language tools, MCP servers and third-party extensions. | Supplied/configured by your tools repository, not the framework. |
 
@@ -24,7 +24,7 @@ Run `make -C "$FACTORY_HOME" install` for shared framework dependencies. Install
 
 Keep framework and tools in separate checkouts. Ask your agent to create project `factory.json` extending the selected team configuration. It should read the coordinator instructions, select the factory, inspect project instructions and available tools, and configure only the roles being used. Existing global Pi settings are not imported implicitly.
 
-Provide provider/model choices and the **name** of a credential environment variable, not its value in the conversation. Each member can have different execution settings in its factory.json config, including native Pi overrides for custom providers and MCPs. The coordinator configures those member entries and checks the selected factory before launching sessions. In a Git project it also excludes root `.ralph/` runtime state from version control.
+Provide provider/model choices and the **name** of a credential environment variable, not its value in the conversation. Each member can have different execution settings in its factory.json config, including native Pi overrides for custom providers and MCPs. The coordinator configures those member entries and checks the selected factory before launching sessions. Any tool-specific runtime exclusions belong to the selected factory’s setup guidance.
 
 For example:
 
@@ -32,16 +32,18 @@ For example:
 
 Start the service from `$FACTORY_HOME/orchestrator/comms` with `docker compose up --build -d`. Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
 
-Use each role's `start.sh` for consistent startup; the shared launcher resolves the declared member path and loads its configuration and skills. No task argument starts an unassigned interactive role. The agent can inspect configuration with a launch dry run and test native readiness with `--check`. Checks do not call the model, though MCP checks start processes or contact configured services and loop checks can download the declared plugin. A successful credential check confirms local resolution; the first real model request can still fail remotely.
+For managed workers, use dispatch or `node "$FACTORY_HOME/orchestrator/session.ts" <member> <task-directory>` in a visible terminal. Factory resolves configuration and skills, then invokes the declared entrypoint if present. Running a bundle’s `start.sh` directly is standalone operation and does not apply `factory.json`. No task argument starts an unassigned interactive role. The agent can inspect configuration with a launch dry run and test native readiness with `--check`. Checks do not call the model, though MCP checks start processes or contact configured services and loop checks can download the declared plugin. A successful credential check confirms local resolution; the first real model request can still fail remotely.
 
 ## Common failures
 
 | Symptom | What to establish and do |
 | --- | --- |
+| Terminal monitor has no tasks | Check the displayed project identifier, switch projects with `p`, or pass `-project /absolute/project/path`. Use `FACTORY_COMMS_URL` or `-url` for a nondefault service; `COMMS_PORT` alone does not configure this client. |
+| Terminal monitor shows stale data | The last refresh failed. Check service connectivity and `COMMS_AUTH_TOKEN`, then press `r`. The monitor does not start Compose. |
 | Comms unavailable / HTTP 401 | Check Compose health, matching `FACTORY_COMMS_URL`, and token presence in each session. Do not create a local fallback task store. |
 | Task records are missing | Check the Compose project name and volume. `down -v` deletes task history; ordinary `down` preserves it. Local documents cannot reconstruct a deleted database. |
 | Helpers ask for a project `.factory` directory | You are running an older framework checkout. Use the current external checkout's launcher from the application root, or pass `--project`. |
-| Factory member cannot launch | Check its name and bundle path in `factories/<name>/factory.json`. Paths are relative to that file. A task-bound launch only allows its factory's declared members. |
+| Factory member cannot launch | Check its name and bundle path in the resolved factory configuration. Paths are relative to the file declaring them, including inherited files. A task-bound launch only allows its factory's declared members. |
 | Provider or model is unset | Set provider/model in factory defaults or member overrides; define custom endpoints in the factory's providers map. Check protocol and actual model ID instead of guessing them. |
 | Credentials work in one terminal but not an agent pane | Check variable presence and the pane's inherited environment without printing values. The launcher does not source shell startup files. Restart the session with the intended environment or explicitly share its private auth file. |
 | TLS, proxy, or corporate CA failure | Identify whether the failing client is Pi/Node, Git, Go, or the remote service. Apply the organization's trust/proxy setup to that client. The wrapper can map `NODE_EXTRA_CA_CERTS` to an existing variable holding a CA file path; this does not configure Git or Go trust. Keep certificate verification enabled. |
@@ -54,15 +56,15 @@ Use each role's `start.sh` for consistent startup; the shared launcher resolves 
 | A pane looks idle or progress is stale | Inspect the task inbox, progress file, live terminal output, and any loop state. Determine whether the agent is waiting, failed, reached its limit, or completed. Do not mark success from terminal appearance. |
 | A loop reaches its limit or repeats a failure | Preserve partial work and evidence. Reassess with the coordinator; use native resume only for the correct task and a justified assignment. Human decisions and unresolved environment failures should stop the loop. |
 | Task status says cancelled but work continues | Stop the active runner through native controls. Status is a record, not a process-control signal. Inspect partial changes afterward. |
-| The Go check script stops early | It checks formatting, tests, then lint, in that order. Later steps did not run after a failure. Inspect the actual output; use project-specific commands for multi-module repositories or more appropriate verification. |
+| A factory-specific check stops early | Inspect its script and actual output in the tools checkout. Check ordering and supported project layouts are defined by that factory, not by the framework. |
 
 Startup failures after native checking begins create `session_startup_failed` task events with a private runtime directory. Inspect its `startup-checks.json` carefully; it can contain sensitive native diagnostics. Configuration or approval errors that occur earlier appear on stderr and need not have that event. Explain the actual failure to the user without echoing credentials.
 
 ## Updating the toolbox
 
-Use the [preview-first toolkit updater](toolkit-updates.md) to preserve factory definitions, local overrides and task history. Existing copies should establish their baseline before updating the source checkout. `make update` updates dependencies, not your toolbox checkout or customizations. Changes to authored configuration apply to new prepared sessions; existing runtime copies remain separate until native controls or a new session apply the changes. An already running role does not gain a new MCP merely because its source JSON was edited.
+Update the [framework and team checkouts independently](toolkit-updates.md). Review changes before updating; keep project-specific overrides in project `factory.json`. `make update` updates dependencies, not your toolbox checkout or customizations. Changes to authored configuration apply to new prepared sessions; existing runtime copies remain separate until native controls or a new session apply the changes. An already running role does not gain a new MCP merely because its source JSON was edited.
 
-When changing a role's skill list, retain the desired existing entries: wrapper overlays replace the entire list. Native JSON overlays merge object keys recursively but replace arrays and scalar values. The same replacement rule applies to a native `packages` array. Details and examples live in [session configuration](../orchestrator/README.md).
+When changing a role's skill list, retain the desired existing entries: member selections replace the entire default list. Configuration objects merge recursively; arrays and scalar values replace. Select extension packages through the named `extensions` catalog. Details and examples live in [session configuration](../orchestrator/README.md).
 
 ## Maintainer checks
 

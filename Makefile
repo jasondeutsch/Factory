@@ -14,3 +14,7 @@ update:
 
 start:
 	./orchestrator/start.sh $(if $(PROJECT),--project "$(PROJECT)") $(if $(FACTORY),--factory "$(FACTORY)")
+
+.PHONY: monitor
+monitor:
+	./orchestrator/monitor.sh $(if $(PROJECT),-project "$(PROJECT)")

@@ -14,7 +14,7 @@ npm ci --omit=dev
 export FACTORY_HOME=/path/to/factory
 ```
 
-Node 22.18+, Pi, and Docker with Compose are required for the supplied Pi coordinator. Herdr is optional. Install any additional tools required by your chosen factory separately.
+Node 22.18+ and Pi are required for the supplied Pi coordinator. Docker with Compose is needed to start the local Comms service; an existing service can be selected with `FACTORY_COMMS_URL`. Herdr is optional. The terminal monitor launcher requires Go 1.26+; a prebuilt monitor binary does not. Install any additional tools required by your chosen factory separately.
 
 The application can contain just one Factory configuration file, `factory.json`:
 
@@ -94,7 +94,15 @@ Your current agent can serve as coordinator if it has shell/terminal access and 
 
 See [both coordinator setup paths](orchestrator/README.md#two-ways-to-start-coordinating) for service startup, MCP connection, configuration loading and an example prompt. Automatic inbox delivery currently has a Pi adapter; other runners require their own adapter or explicit inbox checks. Another agent can also launch the supplied coordinator through terminal controls; Comms has no process-launch MCP tool.
 
-View recorded workflow status at [the task monitor](http://127.0.0.1:8090/monitor).
+Open the terminal monitor from your project directory (with Comms running):
+
+```sh
+"$FACTORY_HOME/orchestrator/monitor.sh"
+```
+
+Or run `make monitor PROJECT=/path/to/project` from the Factory checkout. The TUI shows task status, attention items, agents, message routes, and activity. Use arrows to select tasks, `1`/`2`/`3` for overview/comms/events, and `q` to quit. See [monitor controls and configuration](orchestrator/comms/README.md#terminal-monitor).
+
+The [browser monitor](http://127.0.0.1:8090/monitor) remains available.
 
 ## Configuration and runtime
 

@@ -77,7 +77,7 @@ This shared token controls access to the service; it does not authenticate indiv
 
 ## MCP tools
 
-Every operation uses an explicit task ID; project identifiers are supplied strings, not paths that the container tries to discover. Task names can contain spaces and uppercase letters. Task IDs include a UTC timestamp and random suffix.
+Task-scoped operations use an explicit task ID; creation and project listings use a project identifier instead; project identifiers are supplied strings, not paths that the container tries to discover. Task names can contain spaces and uppercase letters. Task IDs include a UTC timestamp and random suffix.
 
 | Tool | Required inputs | Result and behavior |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ For retryable creation, messages, and events, preserve `request_key` across retr
 
 For example, ask a connected coordinator:
 
-> Read `$FACTORY_HOME/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep the spec, plan, and review artifacts in the repository. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
+> Read `$FACTORY_HOME/orchestrator/SKILL.md` and use comms to track a new task in this application: reduce repeated account reads. Keep task documents in the configured runtime directory and application code in the project. Coordinate visible agents, record decisions and progress in comms, and show me the report URL.
 
 The orchestrator creates and retains the task ID, reuses the actual launcher registrations (or registers its own existing instance), creates canonical assignments, and updates overall status. Workers accept/decline, report progress/blockers, and submit structured results using the assignment tools. Agents retrieve messages, acknowledge `read`, explicitly declare `exec` before acting, and publish assignment evidence. Herdr or another existing session control can notify a recipient after the message is stored. The service supplies no agent scheduler. The [native Pi adapter](delivery.md) handles background inbox hints; other runners can implement its MCP contract.
 
@@ -216,3 +216,35 @@ It reads Pi v3 session records, verifies the runtime instance and single-assignm
 ## Message execution state
 
 `execute_message` takes `task_id`, `message_id`, and `actor` (the declared recipient). It requires a prior read acknowledgement and is idempotent. Returned messages expose `status: sent | read | exec` and an optional `executed_at`. This describes the recipient's declaration, not completed work. See the [delivery contract](delivery.md).
+
+## Terminal monitor
+
+With Comms running, launch from the application repository:
+
+```sh
+"$FACTORY_HOME/orchestrator/monitor.sh"
+```
+
+The launcher uses Go and the vendored dependencies; it does not install packages or start agents. Alternatively, run `make monitor PROJECT=/path/to/project` from the Factory checkout. For a standalone executable, build from `orchestrator/comms`:
+
+```sh
+go build -mod=vendor -o /tmp/factory-monitor ./cmd/monitor
+/tmp/factory-monitor -project /path/to/project
+```
+
+The endpoint defaults to `http://127.0.0.1:8090/mcp`. Override it with `FACTORY_COMMS_URL` or `-url`. Set `COMMS_AUTH_TOKEN` if the service requires authentication. `-project` selects the exact project identifier recorded in Comms; existing local paths are resolved to absolute paths. The default is the calling directory.
+
+The display refreshes every three seconds. Overview highlights task status, open attention, active assignments, and agent contact. Comms shows observed sender-to-recipient routes and message contents; events shows recorded activity. Route counts represent each message's current **sent**, **read**, or **exec** state, not three cumulative totals. Contact is distinct from work progress; expired contact is unknown. No workflow stage or connection is inferred.
+
+| Key | Action |
+| --- | --- |
+| Arrows / `j`, `k` | Select a task, or scroll the focused detail pane |
+| Tab | Switch focus between tasks and details |
+| `1`, `2`, `3` | Overview, communications, events |
+| Page Up / Page Down / Home | Scroll details / return to top |
+| `p` | Cycle recorded projects |
+| `n`, `b` | Older task page / newest task page |
+| `r`, Space | Refresh now / pause automatic refresh |
+| `q`, Ctrl-C | Quit |
+
+Requires at least 65 columns × 18 rows. Task totals apply to the current page of up to 50 tasks. The API bounds detailed records; the monitor identifies partial responses and shows message/event coverage. A failed refresh retains the last successful snapshot and marks it stale. The monitor is read-only and uses the existing HTTP status endpoints; it does not acknowledge messages or change task state. The browser monitor remains available separately.

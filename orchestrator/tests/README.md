@@ -19,6 +19,10 @@ node orchestrator/tests/eval_recovery.ts --output /tmp/factory-recovery
 
 The report includes message-state, contact, retry, attachment, configuration, updater and usage checks. It creates JSON/HTML evidence, not an agent-quality evaluation. Go tests also cover database reopening, assignment transitions, delivery leases, replacement and contact expiry. These tests do not establish real window opening, model behavior, or corporate-network compatibility.
 
+## Terminal monitor checks
+
+Go tests cover read-only HTTP requests, task selection, stale-result rejection, connection errors, control-character sanitization, and display bounds at 120×40, 80×24 and 65×18. For a live check, start Comms and launch `"$FACTORY_HOME/orchestrator/monitor.sh"` from a project with recorded tasks. Check task/project selection, overview/comms/events, scrolling, pause/refresh, and clean terminal restoration on quit. Disconnect Comms to confirm the last snapshot is marked stale. These checks do not establish agent delivery or task correctness.
+
 ## Live acceptance (pending)
 
 Use a disposable project and an installed factory, with a human present. Keep product implementation and verification with the coder and reviewer.
