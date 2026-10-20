@@ -27,7 +27,7 @@ The application can contain just one Factory configuration file, `factory.json`:
 }
 ```
 
-Run from the application root:
+To launch the supplied coordinator (Pi by default), run from the application root:
 
 ```sh
 "$FACTORY_HOME/orchestrator/start.sh"
@@ -40,6 +40,61 @@ Alternatively, leave the application completely free of Factory files and select
 ```
 
 `--project /path/to/application` explicitly selects another working directory. `--check` checks coordinator readiness; `--check-factory` checks all declared members. Both exit without starting interactive work. With no configuration at all, the built-in coordinator uses your native Pi provider/model defaults; no worker agents are configured.
+
+## Standalone configuration with your own resources
+
+This `factory.json` uses your own worker, skill, recipe and MCP server. It does not extend a bundled factory. Factory supplies the coordinator and Comms infrastructure automatically.
+
+```json
+{
+  "name": "my-team",
+  "recipe": "../my-resources/workflow.md",
+  "defaults": {
+    "runner": "pi",
+    "provider": "team-gateway",
+    "model": "your-model-id",
+    "mcps": ["comms"]
+  },
+  "providers": {
+    "team-gateway": {
+      "baseUrl": "https://gateway.example.com/v1",
+      "api": "openai-completions",
+      "apiKey": "${TEAM_API_KEY}",
+      "models": [{ "id": "your-model-id" }]
+    }
+  },
+  "mcps": {
+    "team-tools": {
+      "url": "http://127.0.0.1:9000/mcp"
+    }
+  },
+  "agents": [
+    {
+      "name": "worker",
+      "path": "../my-resources/agents/worker",
+      "skills": [
+        "@factory/orchestrator/comms/skills/task-comms",
+        "../my-resources/skills/my-skill"
+      ],
+      "mcps": ["comms", "team-tools"]
+    }
+  ]
+}
+```
+
+Replace the example endpoints, model ID and paths, and export `TEAM_API_KEY` before launching. The provider example assumes an OpenAI-compatible Chat Completions API. Remove `team-tools` from both the catalog and worker selection if no custom MCP is needed.
+
+Your worker directory contains `agent.md`; your skill directory contains `SKILL.md`. `workflow.md` describes how the coordinator should use your workers, including approval points and expected outputs. The task-comms skill supplies the shared communication protocol. Add more workers as named entries, or add a `coordinator` entry to select your own coordinator skills. See [configuration](docs/configuration.md) for member overrides and other runners.
+
+All relative paths start at the file declaring them. These resources can remain outside the application; only `factory.json` needs to be in the project.
+
+## Use an existing agent instead
+
+Your current agent can serve as coordinator if it has shell/terminal access and a Comms MCP connection. Load the [coordinator skill](orchestrator/SKILL.md) and [task-comms skill](orchestrator/comms/skills/task-comms/SKILL.md), resolve the project configuration, and give it your task. This does not require a second coordinator process or a Pi coordinator.
+
+See [both coordinator setup paths](orchestrator/README.md#two-ways-to-start-coordinating) for service startup, MCP connection, configuration loading and an example prompt. Automatic inbox delivery currently has a Pi adapter; other runners require their own adapter or explicit inbox checks. Another agent can also launch the supplied coordinator through terminal controls; Comms has no process-launch MCP tool.
+
+View recorded workflow status at [the task monitor](http://127.0.0.1:8090/monitor).
 
 ## Configuration and runtime
 

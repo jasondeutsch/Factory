@@ -2,6 +2,66 @@
 
 The configuration you edit is project **`factory.json`**, optionally extending an external team configuration. It contains shared defaults and member overrides, plus named providers, MCPs, extensions, and skill selections. The [factory reference](../docs/configuration.md) documents every field. Agent directories contain behavior and reusable resources, not competing configuration files.
 
+## Two ways to start coordinating
+
+The coordinator does not have to be Pi. Choose one session to own coordination for a task: a new configured coordinator, or the agent you are already talking to. Both use the same Comms service, task records, skills and dispatch helpers.
+
+### Launch the supplied coordinator
+
+Install the framework dependencies and set `FACTORY_HOME` to its external checkout. Export the credentials needed by your factory. From the application root containing the optional `factory.json`:
+
+```sh
+export FACTORY_HOME=/path/to/factory
+"$FACTORY_HOME/orchestrator/start.sh"
+```
+
+The launcher resolves project configuration, starts local Comms when needed, prepares the coordinator's configuration and skills, and starts an interactive session. The supplied configuration defaults to Pi. Give that session your task request; it launches workers as needed.
+
+To select configuration outside the application, or launch from another directory:
+
+```sh
+"$FACTORY_HOME/orchestrator/start.sh" \
+  --project /path/to/application \
+  --factory /path/to/tools/factories/golang/factory.json
+```
+
+Another agent with shell and terminal controls can run this same launcher in a visible pane/window. It must leave the interactive process running there, rather than block its own shell tool waiting for it to exit. Starting a process alone does not submit a task or connect the calling agent's conversation to it. Give the new coordinator its request in that session; subsequent task communication can use Comms. There is no MCP tool for launching a coordinator process.
+
+### Use your existing agent as coordinator
+
+An existing agent needs access to the application and external checkouts, shell/terminal tools for the host helpers, and a native Streamable HTTP MCP connection. Pi is not required for this coordinator; selected workers may still require Pi.
+
+1. Start Comms, or use an existing service:
+
+   ```sh
+   export FACTORY_HOME=/path/to/factory
+   docker compose -f "$FACTORY_HOME/orchestrator/comms/compose.yaml" up --build -d
+   ```
+
+   Use `docker-compose` if that is your installed Compose command. Set `FACTORY_COMMS_URL` in the helper environment when using a different endpoint.
+
+2. Add **Comms** to the existing agent's native MCP configuration with URL `http://127.0.0.1:8090/mcp`, then reconnect/reload its MCP tools. Configuration syntax depends on the runner. If `COMMS_AUTH_TOKEN` is enabled, configure the matching bearer header through that client's credential mechanism. See [MCP connection details](comms/README.md#connect-an-agent). Reading a skill does not establish this connection.
+
+3. Have the agent read the [coordinator skill](SKILL.md) and [task-comms skill](comms/skills/task-comms/SKILL.md). From the application root, have it resolve project configuration with:
+
+   ```sh
+   node "$FACTORY_HOME/orchestrator/session.ts" coordinator --dry-run
+   ```
+
+   Add `--factory /path/to/factory.json` when using external configuration without a project file. The preview supplies resolved membership, instructions, selected skills, source paths and runtime locations. This handles inherited configurations without asking the agent to reimplement their merge rules. It neither starts another agent nor changes the existing agent's model, tools or MCP connections. Apply any required runner settings through its native controls.
+
+4. Give the existing agent your task. It follows [coordinator operations](references/operations.md) to create or resume the task, register its actual participant, attach documents and use [dispatch](references/dispatch.md) to launch workers. Keep the returned task and participant IDs. Do not start a second coordinator for the same work merely to obtain a launcher-generated identity.
+
+For example, tell your existing agent:
+
+> Act as the Factory coordinator for /path/to/application. The framework is at /path/to/factory, and Comms is connected. Load the coordinator and task-comms skills, resolve the project's factory.json using the coordinator dry run, and create a task for a minimal Hello World program in Go. Launch the configured workers as needed. Pause for my required approvals and report progress and blockers here.
+
+The prepared Pi coordinator includes automatic inbox delivery. An existing session receives that behavior only if it has the delivery adapter configured. Other runners need an adapter implementing the [delivery contract](comms/delivery.md), or the agent must explicitly check its inbox and coordinator attention items at turn boundaries and while supervising work. A skill cannot wake an idle or stopped agent. Do not claim automatic notifications where no adapter exists.
+
+### Observe either mode
+
+Open [the task monitor](http://127.0.0.1:8090/monitor), select the project, then its task. It shows recorded assignments, participants, messages and attention items. Port 8091 is the SQLite administration panel, not the workflow monitor. You can also ask the coordinating agent for status. Both modes keep Factory artifacts under the configured runtime directory and use the same Comms records.
+
 ## How configuration reaches Pi
 
 Pi does not read `factory.json`. Factory's TypeScript entrypoint **[session.ts](session.ts)** translates it into Pi's native files before starting each agent:
