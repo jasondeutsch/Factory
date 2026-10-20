@@ -2,9 +2,9 @@ ARG GO_IMAGE=golang:1.26-bookworm
 FROM ${GO_IMAGE} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor/ ./vendor/
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/comms ./cmd/comms \
+RUN CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/comms ./cmd/comms \
     && mkdir -p /out/data \
     && chown 65532:65532 /out/data
 

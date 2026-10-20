@@ -110,6 +110,9 @@ func TestHTTPAccessBoundaries(t *testing.T) {
 		status                      int
 	}{
 		{"/healthz", "", "", http.StatusOK},
+		{"/monitor", "", "", http.StatusOK},
+		{"/monitor.js", "", "", http.StatusOK},
+		{"/monitor/projects.json", "", "", http.StatusUnauthorized},
 		{"/mcp", "", "", http.StatusUnauthorized},
 		{"/mcp", "Bearer wrong", "", http.StatusUnauthorized},
 		{"/tasks/missing/report.html", "Bearer fixture-token", "", http.StatusNotFound},
@@ -122,4 +125,55 @@ func TestHTTPAccessBoundaries(t *testing.T) {
 		handler.ServeHTTP(response, request)
 		assert.Equal(t, test.status, response.Code, test.path)
 	}
+}
+
+func TestProjectMonitorEndpoints(t *testing.T) {
+	store := testStore(t)
+	task := testTask(t, store, "monitor-project")
+	owner := testParticipant(t, store, task, "coordinator")
+	worker := testParticipant(t, store, task, "builder")
+	_, err := store.SetTaskFactory(t.Context(), SetTaskFactoryInput{TaskID: task.ID, Factory: FactorySnapshot{Name: "go-factory", Owner: "coordinator", Agents: []FactoryMember{{Name: "coordinator", Path: "orchestrator"}, {Name: "builder", Path: "agents/builder"}}}})
+	require.NoError(t, err)
+	assignment := testAssignment(t, store, task, owner, worker)
+	assignment = updateAssignment(t, store, assignment, worker, "accepted")
+	assignment = updateAssignment(t, store, assignment, worker, "working")
+	_, err = store.RequestAttention(t.Context(), RequestAttentionInput{TaskID: task.ID, Actor: worker.ID, Recipient: "human", Kind: "approval", Title: "Review plan", Detail: "Plan is ready", RequestKey: "review-plan"})
+	require.NoError(t, err)
+	_, err = store.RecordEvent(t.Context(), RecordEventInput{TaskID: task.ID, Actor: "coordinator", Kind: "progress", Message: "Planning started"})
+	require.NoError(t, err)
+	_, err = store.SendMessage(t.Context(), SendMessageInput{TaskID: task.ID, Sender: "coordinator", Recipient: "builder", Kind: "assignment", Text: "Start work"})
+	require.NoError(t, err)
+	handler := HTTPHandler(store, "fixture-token", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	request := httptest.NewRequest(http.MethodGet, "/monitor/projects.json", nil)
+	request.Header.Set("Authorization", "Bearer fixture-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	require.Equal(t, http.StatusOK, response.Code)
+	var projects projectList
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &projects))
+	assert.Equal(t, []string{"monitor-project"}, projects.Projects)
+
+	request = httptest.NewRequest(http.MethodGet, "/monitor/tasks.json?project=monitor-project", nil)
+	request.Header.Set("Authorization", "Bearer fixture-token")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	require.Equal(t, http.StatusOK, response.Code)
+	var tasks monitorTaskList
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &tasks))
+	require.Len(t, tasks.Tasks, 1)
+	assert.Equal(t, task.ID, tasks.Tasks[0].Task.ID)
+	assert.Equal(t, "go-factory", tasks.Tasks[0].Factory)
+	assert.Equal(t, "build", tasks.Tasks[0].ActiveStage)
+	assert.Equal(t, assignment.Title, tasks.Tasks[0].ActiveAssignment)
+	assert.Equal(t, "working", tasks.Tasks[0].AssignmentState)
+	assert.Equal(t, "builder", tasks.Tasks[0].Assignee)
+	assert.Equal(t, 1, tasks.Tasks[0].OpenAttention)
+	assert.Equal(t, 4, tasks.Tasks[0].UnreadMessages)
+	assert.Contains(t, tasks.Tasks[0].LatestEvent, "message_sent")
+
+	request = httptest.NewRequest(http.MethodGet, "/monitor/tasks.json?project=", nil)
+	request.Header.Set("Authorization", "Bearer fixture-token")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusBadRequest, response.Code)
 }

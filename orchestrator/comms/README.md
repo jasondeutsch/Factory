@@ -20,9 +20,14 @@ The default endpoints are:
 | --- | --- |
 | `http://127.0.0.1:8090/mcp` | Agent MCP connection. |
 | `http://127.0.0.1:8090/healthz` | Process/database readiness. |
+| `http://127.0.0.1:8090/monitor` | Project task monitor; select a project and open a task's detailed status view. |
 | `http://127.0.0.1:8090/tasks/<task-id>/report.html` | Current task report, generated on each request. |
 
-Set `COMMS_PORT` before starting Compose to use another host port; set `FACTORY_COMMS_URL` in the coordinating/worker environment to the matching full `/mcp` URL. The default port mapping binds to loopback. The image runs as UID/GID `65532`, contains a static Go executable, and needs no separate SQLite installation, Python, Node, or shell at runtime. Building requires access to the Go builder image and module downloads. `GO_IMAGE` is an overridable Docker build argument if the team supplies a compatible builder image with its corporate trust configuration.
+Set `COMMS_PORT` before starting Compose to use another host port; set `FACTORY_COMMS_URL` in the coordinating/worker environment to the matching full `/mcp` URL. The default port mapping binds to loopback. The image runs as UID/GID `65532`, contains a static Go executable, and needs no separate SQLite installation, Python, Node, or shell at runtime. Go dependencies are vendored, so the Docker build does not contact a Go module proxy. Docker still needs the configured Go builder image; `GO_IMAGE` is an overridable build argument if the team supplies a compatible image with its corporate trust configuration.
+
+The monitor's HTML shell contains no task data and can load without a token. If `COMMS_AUTH_TOKEN` is set, enter the same token used by Comms in the monitor page; it stays in the page's memory and is sent in request headers to the protected read-only monitor endpoints. The page refreshes the selected project's newest tasks every ten seconds and can load older pages; refresh pauses while browsing older tasks. Task stage is shown only when an active assignment records it; otherwise the task is marked as having no active assignment. Select a task to see its participants, messages, assignments, attention items, and full activity details.
+
+When changing Comms dependencies, update `go.mod`/`go.sum` and regenerate `vendor/` from the module directory with `go mod vendor`. The Docker build and offline test command use `-mod=vendor` to ensure the vendored tree is complete.
 
 Stop and remove the default service with:
 

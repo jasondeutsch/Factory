@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,12 @@ type assignmentList struct {
 type taskList struct {
 	Tasks []Task `json:"tasks"`
 }
+type monitorTaskList struct {
+	Tasks []MonitorTask `json:"tasks"`
+}
+type projectList struct {
+	Projects []string `json:"projects"`
+}
 type messageList struct {
 	Messages []Message `json:"messages"`
 }
@@ -34,6 +41,30 @@ type eventList struct {
 type renderedReport struct {
 	HTML       string `json:"html"`
 	ReportPath string `json:"report_path"`
+}
+
+func queryInt(r *http.Request, key string) (int, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0, errors.New("invalid integer")
+	}
+	return parsed, nil
+}
+
+func queryInt64(r *http.Request, key string) (int64, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed < 0 {
+		return 0, errors.New("invalid integer")
+	}
+	return parsed, nil
 }
 
 func registerTool[Input, Output any](server *mcp.Server, name, description string, readOnly bool, handler func(context.Context, Input) (Output, error)) {
@@ -126,6 +157,59 @@ func HTTPHandler(store *Store, token string, logger *slog.Logger) http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: logger})
 	private := http.NewServeMux()
 	private.Handle("/mcp", mcpHandler)
+	private.HandleFunc("GET /monitor", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write([]byte(monitorHTML))
+	})
+	private.HandleFunc("GET /monitor.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write([]byte(monitorJavaScript))
+	})
+	private.HandleFunc("GET /monitor/projects.json", func(w http.ResponseWriter, r *http.Request) {
+		projects, err := store.Projects(r.Context())
+		if err != nil {
+			http.Error(w, "Could not list projects", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(projectList{Projects: projects})
+	})
+	private.HandleFunc("GET /monitor/tasks.json", func(w http.ResponseWriter, r *http.Request) {
+		project := r.URL.Query().Get("project")
+		if err := required("project", project); err != nil {
+			http.Error(w, "A project is required", http.StatusBadRequest)
+			return
+		}
+		limit, err := queryInt(r, "limit")
+		if err != nil {
+			http.Error(w, "Invalid limit", http.StatusBadRequest)
+			return
+		}
+		before, err := queryInt64(r, "before")
+		if err != nil {
+			http.Error(w, "Invalid cursor", http.StatusBadRequest)
+			return
+		}
+		if _, err := pageLimit(limit, 50, 100); err != nil {
+			http.Error(w, "Invalid limit", http.StatusBadRequest)
+			return
+		}
+		tasks, err := store.MonitorTasks(r.Context(), MonitorTasksInput{Project: project, Limit: limit, Before: before})
+		if err != nil {
+			logger.Error("list monitor tasks", "project", project, "error", err)
+			http.Error(w, "Could not list project tasks", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(monitorTaskList{Tasks: tasks})
+	})
 	private.HandleFunc("GET /tasks/{id}/status.json", func(w http.ResponseWriter, r *http.Request) {
 		status, err := store.Status(r.Context(), TaskInput{TaskID: r.PathValue("id")})
 		if err != nil {
@@ -196,7 +280,10 @@ func HTTPHandler(store *Store, token string, logger *slog.Logger) http.Handler {
 				return
 			}
 		}
-		if token != "" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
+		// The monitor shell and its static script contain no task data. Allow
+		// them to load before the user enters a token; data endpoints stay protected.
+		publicMonitorAsset := request.Method == http.MethodGet && (request.URL.Path == "/monitor" || request.URL.Path == "/monitor.js")
+		if !publicMonitorAsset && token != "" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
 			writer.Header().Set("WWW-Authenticate", "Bearer")
 			http.Error(writer, "Unauthorized", http.StatusUnauthorized)
 			return

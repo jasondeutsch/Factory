@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Factory task monitor</title>
+<style>
+:root{color-scheme:light;--ink:#172638;--muted:#5b6878;--line:#dce3eb;--paper:#f4f6f9;--blue:#165ba3;--red:#9c2f25;--amber:#8a4b08;--green:#176b47}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px system-ui,-apple-system,sans-serif}main{max-width:1440px;margin:auto;padding:24px}header,.panel{background:white;border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}h1{font-size:1.5rem;margin:0 0 6px}h2{font-size:1.05rem;margin:0 0 14px}p{margin:6px 0}.muted,small{color:var(--muted)}.controls{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-top:18px}.field{display:flex;flex-direction:column;gap:5px}input,select,button{font:inherit;border:1px solid #aebbc9;border-radius:6px;padding:9px 11px;background:#fff;color:var(--ink)}input[type=password]{width:min(380px,80vw)}button{cursor:pointer;background:#174f83;color:white;border-color:#174f83}.statusline{margin-top:14px;color:var(--muted)}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #e7ebf0;vertical-align:top}th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}td a{color:var(--blue);font-weight:650}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#edf1f5;font-size:.82rem;font-weight:650}.pill.blocked,.pill.needs_input{background:#fff0d8;color:var(--amber)}.pill.failed{background:#fce8e6;color:var(--red)}.pill.complete{background:#e4f3eb;color:var(--green)}.attention{font-weight:700;color:var(--red)}.empty{padding:30px;text-align:center;color:var(--muted)}.error{color:var(--red);white-space:pre-wrap}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.task-summary{max-width:320px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <small>FACTORY · MONITOR</small>
+    <h1>Task monitor</h1>
+    <p class="muted">Recorded task, assignment, attention, message, and event activity.</p>
+    <div class="controls">
+      <label class="field">Comms token for this tab
+        <input id="token" type="password" autocomplete="off" placeholder="Leave blank when authentication is disabled">
+      </label>
+      <label class="field">Project
+        <select id="project"><option value="">Choose a project</option></select>
+      </label>
+      <button id="refresh" type="button">Refresh</button>
+    </div>
+    <p id="message" class="statusline" aria-live="polite">Enter a token if required, then choose a project.</p>
+  </header>
+  <section class="panel">
+    <div class="toolbar"><h2>Tasks</h2><small id="count"></small></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Task</th><th>Status</th><th>Factory</th><th>Active work</th><th>Attention</th><th>Unread</th><th>Latest event</th><th>Updated</th></tr></thead>
+      <tbody id="tasks"><tr><td colspan="8" class="empty">Choose a project to view tasks.</td></tr></tbody>
+    </table></div>
+    <div class="controls"><button id="older" type="button" hidden>Load older tasks</button></div>
+  </section>
+</main>
+<script src="/monitor.js" defer></script>
+</body>
+</html>
