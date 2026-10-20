@@ -95,7 +95,7 @@ The launcher appends the role instruction, selected factory recipe, and every se
 | Entry point | What it does |
 | --- | --- |
 | `orchestrator/start.sh` | Calls `startup.ts`, which manages service readiness, then calls `session.ts coordinator`. |
-| An agent's `start.sh` | Calls `session.ts <role>` directly. |
+| An agent's `start.sh` | Independent runner entrypoint owned by the agent bundle. A configured member `entrypoint` lets Factory call it with the prepared profile and instructions. |
 | `session.ts` | Selects the factory member, prepares its private profile, checks native readiness, registers a task-bound instance, and runs the interactive agent process. |
 | `lib/pi.ts` | Builds native Pi JSON and invokes Pi's own credential/MCP checks. It is an internal module, not another process to operate. |
 
@@ -167,4 +167,4 @@ Pi model/tool settings inherited from factory defaults do not apply to command r
 
 ## Add a member
 
-Create a directory with `agent.md`, skills/scripts as needed, and a thin start script calling `session.ts <role>`. Add its name, relative path, resource selections, and any execution overrides to the factory file. Keep the recipe human-readable. Task templates and loop settings come from the selected factory; names and directory placement do not imply behavior.
+Create a directory with `agent.md`, skills/scripts as needed, and an optional standalone runner entrypoint. Set the member's `entrypoint` to its relative path to use it during managed Pi launches; the script must not call `session.ts`. Add its name, relative path, resource selections, and any execution overrides to the factory file. Keep the recipe human-readable. Task templates and loop settings come from the selected factory; names and directory placement do not imply behavior.

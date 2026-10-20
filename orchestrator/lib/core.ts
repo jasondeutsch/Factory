@@ -129,6 +129,7 @@ export function factoryDefinition(name?: string) {
         ![
           "name",
           "path",
+          "entrypoint",
           "config",
           "skills",
           "mcps",
@@ -149,6 +150,18 @@ export function factoryDefinition(name?: string) {
       )
     )
       throw new Error("Agent path must reference its instructions");
+    if (member.entrypoint !== undefined) {
+      if (typeof member.entrypoint !== "string" || !member.entrypoint.trim())
+        throw new Error(
+          "entrypoint must be a nonempty path relative to the agent bundle",
+        );
+      const entrypoint = fs.realpathSync(
+        path.resolve(directory, member.entrypoint),
+      );
+      if (!inside(directory, entrypoint) || !fs.statSync(entrypoint).isFile())
+        throw new Error("entrypoint must be a file inside the agent bundle");
+      fs.accessSync(entrypoint, fs.constants.X_OK);
+    }
     if ("config" in member && !object(member.config))
       throw new Error("Member config must be an object");
     if ("handoff" in member && !object(member.handoff))
@@ -180,6 +193,10 @@ export function factoryDefinition(name?: string) {
       !["pi", "command"].includes(resolved.runner)
     )
       throw new Error("Invalid runner");
+    if (member.entrypoint && (resolved.runner || "pi") !== "pi")
+      throw new Error(
+        "entrypoint is for Pi runners; command runners use config.command",
+      );
     if (
       resolved.delivery !== undefined &&
       !["native", "manual"].includes(resolved.delivery)
@@ -315,6 +332,9 @@ export function configuration(role: string, factory: string) {
     member,
     config,
     directory: member.path,
+    entrypoint: member.entrypoint
+      ? path.resolve(member.path, member.entrypoint)
+      : undefined,
     base: projectRoot(),
     source: loadFactory().source,
   };

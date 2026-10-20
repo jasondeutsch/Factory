@@ -58,6 +58,7 @@ Member `skills`, `mcps`, and `extensions` select resources. If omitted, their de
 | --- | --- |
 | `name` | Unique role name used for launch and communication. |
 | `path` | Directory containing `agent.md`, or `SKILL.md` for the coordinator. Relative to its declaring file, or absolute. |
+| `entrypoint` | Optional executable path inside the agent bundle, such as `start.sh`. For Pi runners, Factory calls it with prepared instructions, native profile and session arguments. Without it, Factory calls Pi directly. |
 | `config` | Optional execution overrides, using the fields below. |
 | `skills` | Paths to skill directories or entrypoint files, relative to its declaring file, or absolute. Include the shared task-comms skill. |
 | `mcps` | Names from the factory's `mcps` map. |
@@ -150,3 +151,16 @@ A member may set this in `config` (or inherit it from `defaults`):
 ## Runtime ownership
 
 Tasks live in `<runtime_dir>/tasks/`; sessions, dispatch receipts and diagnostics live in sibling directories. Project identity uses the canonical application path, so projects with the same name remain separate. Use a distinct runtime directory per project when overriding the default. Task pointers validate project identity before use. Comms SQLite storage remains controlled by Compose volumes, independently of this setting.
+
+## Independent agent entrypoints
+
+An agent entrypoint must not call back into Factory. For a Pi member with `"entrypoint": "start.sh"`, Factory owns configuration resolution, readiness checks, task registration and terminal orchestration. It calls the entrypoint in the application working directory with:
+
+- `AGENT_EXECUTABLE`: selected Pi executable, used for both checks and launch.
+- `AGENT_INSTRUCTIONS_FILE`: the complete assembled instructions, including the role and selected skills. The entrypoint must load this once instead of adding its standalone defaults again.
+- `PI_CODING_AGENT_DIR`: the prepared native Pi profile.
+- Native Pi arguments: session output path, additional permitted options and initial prompt.
+
+The entrypoint forwards arguments unchanged, preserves the working directory and environment, and uses `exec` so signals and exit status belong to the runner. No Factory import, installation path or role name is required in the entrypoint. The path is explicit in member configuration; Factory does not guess from the presence of `start.sh`. Command runners continue to use `config.command` and its placeholders.
+
+Standalone launchers use their bundle's instructions/skills and native Pi configuration. They do not resolve `factory.json`, register participants or add Comms. Native model/MCP settings must be configured by the user. This keeps one configuration owner per launch: Pi for standalone sessions, Factory's prepared profile for managed sessions.

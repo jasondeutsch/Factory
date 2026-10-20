@@ -67,7 +67,7 @@ export function prepare(
 ) {
   const project = projectRoot(),
     resolved = configuration(role, factory),
-    { config, directory, base, definition, source } = resolved;
+    { config, directory, base, definition, source, entrypoint } = resolved;
   const session = path.join(
     runtimeRoot(),
     "sessions",
@@ -101,6 +101,8 @@ export function prepare(
     "FACTORY_TASK_DIR",
     "FACTORY_PARTICIPANT_ID",
     "FACTORY_ROUTING_IDENTITY",
+    "AGENT_INSTRUCTIONS_FILE",
+    "AGENT_EXECUTABLE",
   ])
     delete env[name];
   if (task) {
@@ -180,10 +182,13 @@ export function prepare(
       throw new Error(
         "args must not override prepared configuration or session ownership",
       );
+    if (entrypoint) {
+      env.AGENT_EXECUTABLE = config.executable || "pi";
+      env.AGENT_INSTRUCTIONS_FILE = file;
+    }
     command = [
-      config.executable || "pi",
-      "--append-system-prompt",
-      file,
+      entrypoint || config.executable || "pi",
+      ...(entrypoint ? [] : ["--append-system-prompt", file]),
       "--no-skills",
       "--no-approve",
       ...extra,
@@ -386,7 +391,7 @@ export async function main(argv = process.argv.slice(2)) {
       delete checkEnv.FACTORY_TASK_ID;
       await check(
         plan.profile,
-        plan.command[0],
+        plan.config.executable || "pi",
         checkEnv,
         plan.project,
         timeout * 1000,
