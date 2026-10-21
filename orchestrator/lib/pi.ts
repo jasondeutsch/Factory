@@ -168,6 +168,7 @@ export async function check(
   cwd: string,
   timeout: number,
   requiredCommands: string[] = [],
+  probeModel = false,
 ) {
   if (!profile.summary.provider || !profile.summary.model)
     throw new Error(
@@ -199,6 +200,24 @@ export async function check(
       "--no-approve",
     ],
   };
+  if (probeModel)
+    commands.model = [
+      executable,
+      "--provider",
+      profile.summary.provider,
+      "--model",
+      profile.summary.model,
+      "--thinking",
+      profile.summary.thinking || "off",
+      "--print",
+      "--no-session",
+      "--no-tools",
+      "--no-extensions",
+      "--no-skills",
+      "--no-context-files",
+      "--no-approve",
+      "Reply with OK.",
+    ];
   for (const [name, argv] of Object.entries(commands)) {
     const output = await capture(
       argv,
@@ -213,7 +232,7 @@ export async function check(
     writeJSON(file, report);
     if (output.exit_code !== 0 || output.timed_out)
       throw new Error(
-        `Pi ${name} startup check failed; private diagnostics: ${file}`,
+        `Pi ${name} ${name === "model" ? "probe" : "startup check"} failed; private diagnostics: ${file}`,
       );
     if (name === "extensions") {
       const responses = output.stdout.split("\n").flatMap((line: string) => {
@@ -234,7 +253,7 @@ export async function check(
           throw new Error(
             `Pi command unavailable: ${command}; diagnostics: ${file}`,
           );
-    } else {
+    } else if (name !== "model") {
       const data = JSON.parse(output.stdout);
       if (name === "credentials" && data.status !== "ready")
         throw new Error(`Pi credentials not ready: ${file}`);

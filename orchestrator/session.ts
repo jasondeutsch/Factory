@@ -71,6 +71,7 @@ export function startupFailureSummary(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const known = [
     /^Pi (credentials|mcp|extensions) startup check failed/,
+    /^Pi model probe failed/,
     /^Pi command unavailable: [a-zA-Z0-9_-]+/,
     /^Pi credentials not ready/,
     /^MCP [a-zA-Z0-9_-]+ not connected/,
@@ -307,6 +308,7 @@ export async function main(argv = process.argv.slice(2)) {
       loop: { type: "string" },
       "dry-run": { type: "boolean" },
       check: { type: "boolean" },
+      "probe-model": { type: "boolean" },
       validate: { type: "boolean" },
       "check-factory": { type: "boolean" },
       help: { type: "boolean" },
@@ -314,7 +316,7 @@ export async function main(argv = process.argv.slice(2)) {
   });
   if (values.help) {
     console.log(
-      "session.ts <role> [task-dir] --factory <name> [--dry-run | --check]\nsession.ts --check-factory --factory <name>",
+      "session.ts <role> [task-dir] --factory <name> [--dry-run | --check [--probe-model]]\nsession.ts --check-factory --factory <name>",
     );
     return;
   }
@@ -326,6 +328,8 @@ export async function main(argv = process.argv.slice(2)) {
       .length > 1
   )
     throw new Error("Choose one inspection mode");
+  if (values["probe-model"] && !values.check)
+    throw new Error("--probe-model requires --check");
   if (values["check-factory"]) {
     if (positionals.length)
       throw new Error("--check-factory accepts no positionals");
@@ -457,6 +461,7 @@ export async function main(argv = process.argv.slice(2)) {
         plan.project,
         timeout * 1000,
         loop ? loopPolicy.commands : [],
+        values["probe-model"],
       );
       plan.manifest.startup_checked = true;
     } else if (values.check)

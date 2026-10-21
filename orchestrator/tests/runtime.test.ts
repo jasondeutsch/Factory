@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fixture } from "./fixture.ts";
 import { json, writeJSON, hash, merge } from "../lib/core.ts";
-import { prepareProfile } from "../lib/pi.ts";
+import { prepareProfile, check, type Profile } from "../lib/pi.ts";
 import { terminalHost, shellQuote } from "../lib/terminal.ts";
 import { measurements } from "../adapters/pi/import_usage.ts";
 import { synchronize } from "../scripts/sync_toolkit.ts";
@@ -121,6 +121,27 @@ test("configuration merges member overrides and only materializes selected resou
   assert.deepEqual(Object.keys(profile.files.mcp.mcpServers), ["comms"]);
   assert.match(profile.files.settings.extensions[0], /delivery.ts$/);
   assert.ok(!JSON.stringify(profile.files).includes("do-not-materialize"));
+});
+test("optional model probe exercises selected model and thinking level", async () => {
+  const executable = path.join(f.root, "probe-pi");
+  fs.writeFileSync(
+    executable,
+    `#!${process.execPath}\nconst fs=require('node:fs');const a=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(path.join(f.root, "probe-args"))},JSON.stringify(a)+'\\n');if(a[0]==='auth')console.log(JSON.stringify({status:'ready'}));else if(a[0]==='mcp')console.log(JSON.stringify({servers:[]}));else if(a.includes('rpc'))console.log(JSON.stringify({id:'factory-startup',data:{commands:[{name:'factory-inbox'}]}}));else if(a.includes('--print')){console.error('unsupported thinking level');process.exitCode=1;}`,
+    { mode: 0o700 },
+  );
+  const profile: Profile = {
+    target: path.join(f.root, "probe-profile", "pi"),
+    files: {},
+    auth: {},
+    required: [],
+    summary: { provider: "corporate", model: "example", thinking: "high", enabled_mcps: [] },
+  };
+  fs.mkdirSync(profile.target, { recursive: true });
+  await check(profile, executable, f.env, f.project, 3000);
+  await assert.rejects(check(profile, executable, f.env, f.project, 3000, [], true), /model probe failed/);
+  const calls = fs.readFileSync(path.join(f.root, "probe-args"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  const probe = calls.find((args: string[]) => args.includes("--print"));
+  assert.deepEqual(probe.slice(0, 6), ["--provider", "corporate", "--model", "example", "--thinking", "high"]);
 });
 test("invalid configuration is rejected before launching a process", async () => {
   const file = path.join(f.toolkit, "factories/minimal/factory.json"),

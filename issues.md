@@ -227,3 +227,9 @@ Session startup and nonzero runner exits record a task failure event with the in
 **Status:** Implemented
 
 For members attached to a workflow step with a loop, the Pi delivery adapter checks the current task and canonical assignment before allowing tools that can perform work. It binds to one assignment for the life of the process. When that assignment is submitted, cancelled, or blocked, it refuses subsequent work even if a new assignment appears for the same participant; the coordinator must explicitly start the next batch. Read-only inspection remains available. The Go coder's loop instructions also require stopping immediately after the review handoff. This is an execution guard for Pi tools, not a general filesystem sandbox or an enforcement layer for other runners.
+
+## FACT-021 — Probe configured model capabilities on demand
+
+**Status:** Implemented
+
+`session.ts --check --probe-model` performs a minimal real request against the selected provider, model, and thinking level after local credential, MCP, and extension checks. It reports a provider rejection before assigning work and retains detailed output only in private startup diagnostics. The probe is explicit because it consumes provider tokens and network access; ordinary `--check` still makes no model request. The real provider remains an external dependency, so a successful probe does not guarantee later availability.
