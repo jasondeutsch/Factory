@@ -233,3 +233,9 @@ For members attached to a workflow step with a loop, the Pi delivery adapter che
 **Status:** Implemented
 
 `session.ts --check --probe-model` performs a minimal real request against the selected provider, model, and thinking level after local credential, MCP, and extension checks. It reports a provider rejection before assigning work and retains detailed output only in private startup diagnostics. The probe is explicit because it consumes provider tokens and network access; ordinary `--check` still makes no model request. The real provider remains an external dependency, so a successful probe does not guarantee later availability.
+
+## FACT-022 — Verify gopls is reachable after installation
+
+**Status:** Implemented in Factory Tools
+
+The Go factory's install and update targets now fail if `gopls` was installed but is not on the launching shell's `PATH`, with the Go binary directory in the error. The example documentation calls out this common `go install` behavior. This catches the mismatch before an agent session tries to start its gopls MCP connection; the Factory session check still verifies the actual MCP connection.
