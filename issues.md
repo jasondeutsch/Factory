@@ -94,6 +94,8 @@ A role can be configured correctly without its live session using the latest con
 
 **Status:** Automated recovery eval implemented; live Herdr eval pending · **Priority:** Fourth · **Depends on:** FACT-001 through FACT-003
 
+This is the next integration checkpoint: run the actual coordinator and worker sessions in Herdr, then repeat the setup on another machine. Automated fixtures cannot establish that pane startup, native message delivery, recovery, and the coordinator's decisions work together in a real task. Record setup failures as well as task outcomes; a successful product alone is insufficient evidence of coordination reliability.
+
 ### Problem
 
 Implementation: [recovery eval and live checklist](orchestrator/tests/README.md), with an automated JSON/HTML report. No live agent behavior or product verification is claimed by the fixture run.
@@ -245,3 +247,110 @@ The Go factory's install and update targets now fail if `gopls` was installed bu
 **Status:** Implemented
 
 `make verify` installs the full Node development dependency set, then runs TypeScript checking, the TypeScript test suite, and Go tests. Runtime installation can continue using production dependencies only. The coordinator preview test changes its copied native Pi profile and confirms the launcher uses that selected provider and model, avoiding an OpenRouter-specific assertion that fails when teams customize the profile.
+
+## Future issues
+
+These are candidates for work after the live FACT-004 eval. Keep the orchestrator-driven design; each issue should be refined using observed failures before implementation.
+
+### FACT-024 — Isolate project work by task
+
+**Status:** Proposed
+
+Agents currently inherit host filesystem permissions, and multiple tasks can target one project checkout. Define task workspace ownership and an explicit policy for concurrent writes. Start with a reliable single-writer guard if isolated workspaces are not yet available. Make the coordinator and monitor show which task owns a workspace, and ensure recovery does not leave an invisible lock or start a second writer. Define how reviewed changes reach the project's intended checkout. This does not require a container runtime as the first implementation.
+
+**Acceptance:** Two tasks cannot silently modify the same checkout concurrently; a stopped or failed task has a documented recovery path; the reviewer can inspect the exact changes attributed to one task.
+
+### FACT-025 — Connect task cancellation to process control
+
+**Status:** Proposed
+
+Comms cancellation changes a record but does not stop a running agent. Define a host-side cancellation operation for sessions Factory launched, with an explicit receipt that distinguishes requested, stopped, still running, and unknown. Never infer process termination from stale contact or a cancelled assignment. Retain a manual path for externally managed sessions and ensure retries cannot start replacement work while the old writer may still be active.
+
+**Acceptance:** A user can cancel a launched task and determine whether its agent process actually stopped; uncertain termination blocks unsafe reassignment and is visible in task status.
+
+### FACT-026 — Make inbox delivery available to other runners
+
+**Status:** Proposed
+
+Pi has a native inbox adapter; other runners rely on manual inbox checks or their own adapter. Specify and implement one additional runner adapter against the existing Comms delivery contract. Keep runner-specific behavior in the adapter, including how an idle session is notified, how messages become read and exec, and what happens when the process is stopped. Report unsupported capabilities rather than implying parity with Pi.
+
+**Acceptance:** A non-Pi coordinator or worker can receive a task message without a human prompt, and sent, read, and exec remain distinct and inspectable through Comms.
+
+### FACT-027 — Make new-machine setup diagnosable
+
+**Status:** Proposed
+
+Framework and tools are separate checkouts, while project configuration, local paths, credentials, service access, runner plugins, and native dependencies must agree. Provide one read-only setup check that resolves the selected factory and reports missing or incompatible prerequisites by member before task creation. Give precise remediation for path, dependency, provider, MCP, and Comms failures; do not expose secrets or make paid model requests by default.
+
+**Acceptance:** A new user can run the check on another machine and identify the failing prerequisite without starting an agent or task. The check does not claim that a local credential check proves remote model availability.
+
+### FACT-028 — Separate task documents from starter templates
+
+**Status:** Proposed
+
+The factory's `artifacts` map currently supplies starter files for task scaffolding while decision validation also uses it to decide which documents can be approved. Model the document contract separately: expected outputs, optional starter templates, and approval targets. A produced document must not require a starter file merely to be eligible for approval. Preserve existing task files and pinned workflow definitions when changing configuration.
+
+**Acceptance:** A factory can require and approve a document created entirely by an agent; a starter template can be used without implying approval; existing tasks retain their prior artifact and decision semantics.
+
+### FACT-029 — Show provenance and coverage of task evidence
+
+**Status:** Proposed
+
+Reports already display measured Pi usage and mark unknown usage, while many checks, artifact references, tool claims, and non-Pi usage still arrive as agent-submitted evidence. Distinguish host-observed events, runner-measured usage, and agent claims in the task report and status API. Define coverage for every reported metric, especially tokens, cost, checks, and artifact hashes. Add automatic collection only at reliable integration points; do not turn absent observations into zero or verified success.
+
+**Acceptance:** A reviewer can tell which metrics and checks were observed, which were claimed by an agent, and which are unknown. The report remains truthful when an agent omits usage or evidence.
+
+### FACT-030 — Select agent models and credentials at the factory level
+
+**Status:** Proposed
+
+#### Problem
+
+Teams should be able to reuse an agent library while choosing different models, providers, endpoints, and credential references for a project. Today each bundled agent owns a Pi profile; managed launches permit per-member `provider` and `model` overrides, but factory defaults do not replace bundled model defaults, the same provider/model pair must be repeated for several members, and a factory provider cannot replace a same-named provider from a bundle. The configuration also describes Pi's native provider shape rather than a runner-independent choice. Editing library bundles to change a project's model defeats reuse.
+
+#### Contract and ownership
+
+- Factory defines a small, runner-independent **model selection**: provider reference, model ID, and optional thinking level. The factory owns named model profiles and provider/credential references for managed sessions. A default profile is optional; each member, including the built-in coordinator, may select another profile. The agent bundle supplies its normal standalone model as the final fallback.
+- Resolution order for a managed launch is: explicit member profile, factory default profile, then the bundle's default. A member may still specify a direct provider/model override for a one-off choice, but it must have a clear precedence relative to a named profile; reject contradictory selections rather than guessing.
+- Agent bundles continue to own role instructions, skills, tools, MCPs, extensions, and their standalone launch configuration. A managed factory selection changes only the requested model runtime settings. It must not silently replace an agent's other capabilities.
+- The coordinator chooses which member and profile to launch from the configured factory; it does not translate settings into Pi, Claude, or another runner's files. A runner adapter performs that translation once for all agents using that runner. Keep adapters small and explicit, without a plugin framework or a translator in every agent bundle.
+
+An illustrative project configuration (field names are to be finalized during implementation):
+
+```json
+{
+  "extends": "../factory-tools/factories/golang/factory.json",
+  "defaults": { "model_profile": "standard" },
+  "model_profiles": {
+    "standard": { "provider": "team-gateway", "model": "coding-model" },
+    "design": { "provider": "team-gateway", "model": "reasoning-model", "thinking": "high" }
+  },
+  "providers": {
+    "team-gateway": {
+      "baseUrl": "https://ai.example.com/v1",
+      "api": "openai-completions",
+      "apiKey": "$TEAM_AI_KEY",
+      "models": [{ "id": "coding-model" }, { "id": "reasoning-model" }]
+    }
+  },
+  "agents": [
+    { "name": "coordinator", "model_profile": "standard" },
+    { "name": "architect", "model_profile": "design" },
+    { "name": "coder_golang", "model_profile": "standard" }
+  ]
+}
+```
+
+#### Runner and credential behavior
+
+- First implement translation for Pi using its existing profile-generation path. The adapter validates that the selected provider/model and requested thinking level can be represented, then writes the native settings and selected provider definition into the private session directory. A provider selected from the factory must be able to supersede the bundle's same-named provider for that managed launch; an unselected provider must not be materialized or require credentials.
+- Define the adapter input and capability/error contract independently of Pi. A command runner without a translator must fail clearly when a factory model profile is selected; do not claim that passing a provider/model name as text configures an arbitrary runner. A later runner integration supplies its own translation and verification while using the same resolved selection.
+- Store credential **references**, never key values, in `factory.json`. Resolve an environment variable or private auth-file reference only for the selected provider and pass it through the runner's supported native mechanism. Do not copy keys into task records, model instructions, public session manifests, reports, or diagnostic errors. A missing key reference must fail before starting model work, with the variable name and member identified.
+- Record the resolved profile name, provider, model, runner, and non-secret configuration fingerprint for each actual session. A new session may use a changed profile; the report must show what each attempt used instead of retroactively rewriting earlier sessions. The configured profile is not proof that the provider accepted a request or that the advertised model was served.
+
+#### Acceptance
+
+- A project can select one shared profile for its coordinator and workers and override the architect or reviewer with a second profile without editing any agent bundle.
+- Two project factories can use the same agent library with different providers, endpoints, model IDs, and key references; standalone launches retain the bundle defaults.
+- Pi's generated private profile contains the selected provider/model and no unrelated provider; startup checks identify missing credentials and unsupported selections without printing key values.
+- An unsupported runner or model option produces an actionable error before the session starts. Tests cover precedence, same-name provider replacement, coordinator selection, secret handling, and accurate session reporting.
