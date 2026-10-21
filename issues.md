@@ -196,4 +196,4 @@ The coordinator entrypoint validates configuration, starts local Compose or conn
 
 **Status:** Implemented
 
-`factory.json` owns execution defaults, member overrides, provider definitions, MCP/extension catalogs and skill selections. `session.ts` resolves it and generates private native Pi files before launch. Agent-local configuration and native input profiles are removed. Factory selection is explicit; there is no global coordinator profile. Tests cover isolation, inheritance, generated settings, unused resources, credential boundaries, and native Pi startup without model inference.
+`factory.json` owns team membership, workflow rules, and optional model/provider overrides. Each bundled agent owns its native Pi profile, skills, MCPs, and extensions; Factory owns the built-in coordinator bundle. `session.ts` resolves the selected configuration and generates private Pi files before launch. Factory selection is explicit, with no mutable home-directory coordinator profile. Tests cover isolation, inheritance, generated settings, unused resources, credential boundaries, and native Pi startup without model inference.

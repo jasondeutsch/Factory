@@ -1,6 +1,6 @@
 # Agent startup and configuration
 
-The project’s **`factory.json`** selects a team factory and optional overrides. Each external agent bundle owns its instructions, native Pi provider/model/MCP/extension profile and linked skills. Factory reads those files for managed sessions, then applies explicit member overrides. The [configuration reference](../docs/configuration.md) documents both layers.
+The project’s **`factory.json`** selects a team factory and optional overrides. Factory owns the default coordinator bundle in `orchestrator/agent/`; worker bundles can live in a separate checkout. Each bundle owns its instructions, native Pi provider/model/MCP/extension profile and linked skills. Factory reads those files for managed sessions, then applies explicit member overrides. The [configuration reference](../docs/configuration.md) documents both layers.
 
 ## Two ways to start coordinating
 
@@ -87,7 +87,7 @@ and --append-system-prompt <session>/instructions.md
 
 The Pi translation and native startup checks live in [lib/pi.ts](lib/pi.ts). Each agent gets its own directory, model configuration, tools, and session transcript. Files are private launch output under `~/.factory/<project-name>-<path-hash>/runtime`, or an absolute `FACTORY_RUNTIME_DIR`. **Do not edit generated files to configure future launches.** Change the agent bundle’s authored `pi/` files or the factory’s explicit overrides.
 
-Managed sessions read the agent bundle first, then apply factory fallback values and explicit member overrides. Agent skill links and native Pi files supply the normal provider, model, tools, MCPs and packages. A factory member normally needs only `name`, `path` and `entrypoint`, plus workflow handoff rules. With no team configuration, the framework’s built-in coordinator uses native Pi provider/model defaults.
+Managed sessions read the agent bundle first, then apply factory fallback values and explicit member overrides. Agent skill links and native Pi files supply the normal provider, model, tools, MCPs and packages. A worker member normally needs only `name`, `path` and `entrypoint`; the built-in coordinator needs no member declaration. With no team configuration, the coordinator uses its bundled Pi profile.
 
 The launcher includes the pinned task workflow (or the selected factory workflow for an unassigned session), role instructions, and every selected skill entrypoint. It includes the recipe for the task owner as explanatory context. Supporting documents retain their source directory for relative links. Raw provider/MCP configuration is not copied into model instructions.
 
@@ -168,4 +168,4 @@ Pi model/tool settings inherited from factory defaults do not apply to command r
 
 ## Add a member
 
-Create an agent bundle with `agent.md`, a `pi/` native profile, `skills/` links, scripts as needed and a standalone `start.sh`. Point the factory member at the bundle and entrypoint. Factory reads its profile and skills for managed Pi sessions. Set only workflow-specific model/provider overrides and handoff or loop rules in the factory. The bundle entrypoint must not call `session.ts`.
+Create a worker bundle with `agent.md`, a `pi/` native profile, `skills/` links, scripts as needed and a standalone `start.sh`. Point the factory member at the bundle and entrypoint. Factory reads its profile and skills for managed Pi sessions. Set only workflow-specific model/provider overrides and handoff or loop rules in the factory. The bundle entrypoint must not call `session.ts`. You can override the built-in coordinator by declaring a `coordinator` member pointing at another bundle.

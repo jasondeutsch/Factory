@@ -786,6 +786,21 @@ test("no project config can launch the built-in coordinator preview", async () =
   );
   assert.equal(preview.configuration_source, "built-in coordinator");
   assert.equal(preview.cwd, f.project);
+  assert.equal(
+    preview.command[0],
+    path.join(f.toolkit, "orchestrator/agent/start.sh"),
+  );
+  assert.equal(preview.runner_configuration.provider, "openrouter");
+  assert.equal(
+    preview.runner_configuration.model,
+    "deepseek/deepseek-v4-flash",
+  );
+  assert.equal(
+    preview.skills.filter((file: string) =>
+      file.endsWith("/orchestrator/SKILL.md"),
+    ).length,
+    1,
+  );
   assert.ok(preview.instructions.includes("task-comms"));
   assert.deepEqual(fs.readdirSync(f.project), []);
 });

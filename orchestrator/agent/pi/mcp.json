@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "comms": {
+      "url": "http://127.0.0.1:8090/mcp",
+      "description": "Factory task coordination; enable when using Factory",
+      "exposure": "codemode",
+      "enabled": true
+    },
+    "linear": {
+      "url": "https://mcp.linear.app/mcp/readonly",
+      "headers": {
+        "Authorization": "Bearer ${LINEAR_API_KEY}"
+      },
+      "description": "Read Linear task context when enabled",
+      "exposure": "codemode",
+      "enabled": false
+    }
+  }
+}

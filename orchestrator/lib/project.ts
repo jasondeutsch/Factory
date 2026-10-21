@@ -149,29 +149,15 @@ export function selectFactory(reference?: string) {
   return source;
 }
 export function loadFactory(source = selectFactory()) {
-  const nativeFile = path.join(os.homedir(), ".pi/agent/settings.json");
-  const native =
-    !source && fs.existsSync(nativeFile)
-      ? JSON.parse(fs.readFileSync(nativeFile, "utf8"))
-      : {};
   const baseline = normalize(
     {
       name: "coordinator",
       owner: "coordinator",
-      defaults: {
-        runner: "pi",
-        mcps: ["comms"],
-        ...(native.defaultProvider ? { provider: native.defaultProvider } : {}),
-        ...(native.defaultModel ? { model: native.defaultModel } : {}),
-      },
-      mcps: {
-        comms: { url: "http://127.0.0.1:8090/mcp", exposure: "codemode" },
-      },
       agents: [
         {
           name: "coordinator",
-          path: "@factory/orchestrator",
-          skills: ["@factory/orchestrator/comms/skills/task-comms"],
+          path: "@factory/orchestrator/agent",
+          entrypoint: "start.sh",
         },
       ],
     },

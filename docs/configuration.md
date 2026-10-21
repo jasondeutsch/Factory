@@ -13,7 +13,7 @@ Project `factory.json` is optional. Launch from the application root; Factory an
 
 Paths resolve from the file that declares them before inheritance is merged. Absolute paths and `~/` work too. `@factory/` points to the framework checkout. This applies to agent paths, skills, templates, recipes, runtime directories, MCP working directories and relative executable/extension paths. MCPs without an explicit `cwd` run in the application root. Command-runner argv remains literal except for documented placeholders.
 
-A standalone configuration includes the built-in coordinator and Comms catalog by default. Without any file, the coordinator uses native Pi provider/model defaults; no workers or recipe are assumed. Explicit configurations do not inherit personal Pi settings. Native authentication still requires environment credentials or the configured private auth-file reference.
+A standalone configuration includes Factory's built-in coordinator bundle by default. Without any file, its native Pi profile selects OpenRouter/DeepSeek V4 Flash; no workers or recipe are assumed. Factory configurations do not inherit personal Pi settings. Provide credentials through the environment or a configured private auth-file reference. A team can replace the default by declaring a `coordinator` member with its own bundle path.
 
 To add a worker from another checkout, include a new member in the project's `agents` array:
 
@@ -55,7 +55,7 @@ An agent’s `skills/` links and native `pi/mcp.json` and `pi/settings.json` own
 | Member field | Meaning |
 | --- | --- |
 | `name` | Unique role name used for launch and communication. |
-| `path` | Directory containing `agent.md`, or `SKILL.md` for the coordinator. Relative to its declaring file, or absolute. |
+| `path` | Directory containing `agent.md` or `SKILL.md`, relative to its declaring file or absolute. Omit the `coordinator` member entirely to use Factory's built-in bundle. |
 | `entrypoint` | Optional executable path inside the agent bundle, such as `start.sh`. For Pi runners, Factory calls it with prepared instructions, native profile and session arguments. Without it, Factory calls Pi directly. |
 | `config` | For a bundled agent, optional `provider` and `model` only. Unbundled runners use the execution fields below. |
 | `skills`, `mcps`, `extensions` | Explicit selections for unbundled runners only; bundled agents own these resources. |

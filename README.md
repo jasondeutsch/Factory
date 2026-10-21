@@ -2,7 +2,7 @@
 
 A lightweight framework for coordinating visible, interactive agent sessions. A factory defines its members and workflow steps; the coordinator delegates the current step, gathers results, and brings decisions back to the user. Comms records tasks, messages, approvals, evidence and usage.
 
-This repository contains the coordinator, launchers, Pi delivery extension, and Comms MCP service. Worker agents, factory recipes, skills and model choices belong in a separate repository such as `tools`.
+This repository contains the built-in coordinator agent, launchers, Pi delivery extension, and Comms MCP service. Team worker agents and factory recipes can live in a separate repository such as `tools`.
 
 ## Setup
 
@@ -36,11 +36,11 @@ Alternatively, leave the application completely free of Factory files and select
 "$FACTORY_HOME/orchestrator/start.sh" --factory /path/to/factory-tools/factories/golang/factory.json
 ```
 
-`--project /path/to/application` explicitly selects another working directory. `--check` checks coordinator readiness; `--check-factory` checks all declared members. Both exit without starting interactive work. With no configuration at all, the built-in coordinator uses your native Pi provider/model defaults; no worker agents are configured.
+`--project /path/to/application` explicitly selects another working directory. `--check` checks coordinator readiness; `--check-factory` checks all declared members. Both exit without starting interactive work. With no configuration, Factory uses its bundled coordinator profile (OpenRouter/DeepSeek V4 Flash); no worker agents are configured. Change the bundled profile or use a factory override for another model/provider.
 
 ## Standalone configuration with your own resources
 
-A standalone `factory.json` can refer to your own agent bundles. Each bundle supplies its native model/provider profile, MCPs, extension packages and linked skills. Factory supplies Comms and the coordinator tools; the factory file defines the team's workflow and can override a member model/provider.
+A standalone `factory.json` can refer to your own worker bundles. Each bundle supplies its native model/provider profile, MCPs, extension packages and linked skills. Factory supplies the coordinator bundle and Comms; the factory file defines the team's workflow and can override a member model/provider. A team can replace the built-in coordinator by declaring a member named `coordinator` with its own `path`.
 
 ```json
 {
