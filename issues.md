@@ -209,3 +209,9 @@ The workflow resolver follows a later assignment for the same stage when an earl
 **Status:** Implemented
 
 Dispatch waits for a fresh native inbox contact after a worker registers and before it creates an assignment. A worker that exits after registration no longer receives an assignment it cannot process. Retrying the same dispatch can continue when that worker establishes contact; the retry neither launches a duplicate pane nor creates duplicate work.
+
+## FACT-018 — Acknowledge Herdr command execution
+
+**Status:** Implemented
+
+A Herdr pane launch writes a private marker only after its shell begins executing the submitted command. Dispatch waits for that marker before accepting participant registration as launch success. If Herdr accepts a command but the pane never runs it, the receipt identifies the launch failure and retry does not submit another command automatically. This protects against duplicate workers while making the failure distinct from missing registration or inbox contact. A live Herdr check remains necessary because the automated test uses a pane fixture.

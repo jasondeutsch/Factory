@@ -226,6 +226,21 @@ export async function main(argv = process.argv.slice(2)) {
               );
               save("launch_submitted");
             }
+            if (
+              host === "herdr" &&
+              ["launch_pending", "launch_submitted"].includes(receipt.phase)
+            ) {
+              const marker = path.join(directory, "launch.started");
+              const deadline = Date.now() + timeout * 1000;
+              while (!fs.existsSync(marker)) {
+                if (Date.now() > deadline)
+                  throw new Error(
+                    "Herdr accepted the command, but the pane did not start it. Inspect the pane and receipt before retrying; dispatch will not send a second command automatically.",
+                  );
+                await sleep(250);
+              }
+              save("launch_confirmed");
+            }
             const deadline = Date.now() + timeout * 1000;
             do {
               participant = (await participants()).find(

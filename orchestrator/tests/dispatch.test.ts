@@ -41,7 +41,10 @@ import {Comms} from ${JSON.stringify(path.join(f.toolkit, "orchestrator/lib/clie
 const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');
 if(args[1]==='split')console.log(JSON.stringify({result:{pane:{pane_id:'fixture-pane'}}}));
 if(args[1]==='run'){
- const words=[...args[3].matchAll(/'([^']*)'/g)].map(m=>m[1]);const instance=words[words.indexOf('--instance-id')+1],identity=words[words.indexOf('--routing-identity')+1];
+ const script=fs.readFileSync(args[3].match(/'([^']+)'/)[1],'utf8');
+ const marker=script.match(/> '([^']+launch.started)'/)[1];
+ if(!process.env.SKIP_LAUNCH_MARKER)fs.writeFileSync(marker,'started\\n');
+ const words=[...script.matchAll(/'([^']*)'/g)].map(m=>m[1]);const instance=words[words.indexOf('--instance-id')+1],identity=words[words.indexOf('--routing-identity')+1];
  const c=new Comms();try{const p=await c.call('register_participant',{task_id:${JSON.stringify(metadata.comms_id)},role:'designer',instance_id:instance,routing_identity:identity,request_key:'launch-'+instance});await c.call('record_session',{task_id:${JSON.stringify(metadata.comms_id)},participant_id:p.id,manifest:{runner:'pi',delivery:'native',skills:[],mcps:[],prepared_at:new Date().toISOString(),configuration_fingerprint:'a'.repeat(64),startup_checked:true},request_key:'snapshot-'+instance});if(!process.env.SKIP_CONTACT)await c.call('record_runner_contact',{task_id:${JSON.stringify(metadata.comms_id)},participant_id:p.id,instance_id:instance,state:'idle'});}finally{await c.close();}
  if(process.env.FAIL_LAUNCH_RESPONSE)process.exitCode=1;
 }
@@ -78,8 +81,22 @@ if(args[1]==='run'){
       ...env,
       FAIL_LAUNCH_RESPONSE: "1",
       SKIP_CONTACT: "1",
+      SKIP_LAUNCH_MARKER: "1",
     }),
   );
+  const dispatchRoot = path.join(f.env.FACTORY_RUNTIME_DIR, "dispatch");
+  const receiptDirectory = fs.readdirSync(dispatchRoot)
+    .map((name) => path.join(dispatchRoot, name))
+    .find((candidate) => fs.existsSync(path.join(candidate, "receipt.json")))!;
+  await assert.rejects(
+    f.cli("orchestrator/dispatch.ts", args, env),
+    /pane did not start/,
+  );
+  assert.equal(
+    (await f.client.pages("list_assignments", "assignments", { task_id: metadata.comms_id })).length,
+    0,
+  );
+  fs.writeFileSync(path.join(receiptDirectory, "launch.started"), "started\n");
   await assert.rejects(
     f.cli("orchestrator/dispatch.ts", args, env),
     /no fresh contact/,

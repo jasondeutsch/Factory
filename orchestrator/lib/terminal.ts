@@ -56,7 +56,17 @@ export function launchWindow(
   const command = argv.map(shellQuote).join(" ");
   if (host === "herdr") {
     if (!pane) throw new Error("Missing pane");
-    run(["herdr", "pane", "run", pane, command]);
+    // Herdr acknowledges the command submission before the pane executes it.
+    // The marker distinguishes a started process from a command lost at launch.
+    fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
+    const script = path.join(receiptDir, "launch.sh");
+    const marker = path.join(receiptDir, "launch.started");
+    fs.writeFileSync(
+      script,
+      `#!/bin/sh\nprintf 'started\\n' > ${shellQuote(marker)}\nexec ${command}\n`,
+      { mode: 0o700 },
+    );
+    run(["herdr", "pane", "run", pane, "sh " + shellQuote(script)]);
     return;
   }
   // A .command document uses macOS's native terminal integration and leaves the
