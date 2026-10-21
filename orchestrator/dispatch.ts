@@ -240,20 +240,9 @@ export async function main(argv = process.argv.slice(2)) {
             } while (true);
           }
           receipt.participant_id = participant!.id;
-          const { role, ...assignmentRequest } = request;
-          const assignment = await client.call("create_assignment", {
-            task_id: record.id,
-            assigning_participant_id: v.owner,
-            assignee_id: participant!.id,
-            ...assignmentRequest,
-            request_key: "dispatch-" + key,
-          });
-          receipt.assignment_id = assignment.id;
-          save("assigned");
-          if (
-            (config.runner || "pi") === "pi" ||
-            config.delivery === "native"
-          ) {
+          const nativeDelivery =
+            (config.runner || "pi") === "pi" || config.delivery === "native";
+          if (nativeDelivery) {
             const deadline = Date.now() + timeout * 1000;
             for (;;) {
               const snapshot = await client
@@ -264,15 +253,28 @@ export async function main(argv = process.argv.slice(2)) {
                 .catch((): RecordValue => ({}));
               if (
                 snapshot.manifest?.delivery === "native" &&
-                ["idle", "working"].includes(snapshot.contact_state)
+                (snapshot.contact_state === "idle" ||
+                  (receipt.assignment_id && snapshot.contact_state === "working"))
               )
                 break;
               if (Date.now() > deadline)
                 throw new Error(
-                  "Assignment stored, but native inbox delivery has no fresh contact. Inspect extension status; retry does not duplicate work.",
+                  "Worker registered but its native inbox has no fresh contact; no assignment was created. Inspect the session and retry this dispatch.",
                 );
               await sleep(500);
             }
+          }
+          const { role, ...assignmentRequest } = request;
+          const assignment = await client.call("create_assignment", {
+            task_id: record.id,
+            assigning_participant_id: v.owner,
+            assignee_id: participant!.id,
+            ...assignmentRequest,
+            request_key: "dispatch-" + key,
+          });
+          receipt.assignment_id = assignment.id;
+          save("assigned");
+          if (nativeDelivery) {
             save("native_delivery_ready");
           } else {
             receipt.notice =

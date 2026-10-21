@@ -203,3 +203,9 @@ The coordinator entrypoint validates configuration, starts local Compose or conn
 **Status:** Implemented
 
 The workflow resolver follows a later assignment for the same stage when an earlier assignment was cancelled or declined. Without a replacement, the terminal assignment still blocks the step. Regression coverage includes the recovery service's event order, which publishes the replacement before the cancellation update.
+
+## FACT-017 — Confirm worker contact before assignment
+
+**Status:** Implemented
+
+Dispatch waits for a fresh native inbox contact after a worker registers and before it creates an assignment. A worker that exits after registration no longer receives an assignment it cannot process. Retrying the same dispatch can continue when that worker establishes contact; the retry neither launches a duplicate pane nor creates duplicate work.
