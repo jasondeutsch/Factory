@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs } from "node:util";
 import { Comms, type RecordValue } from "./lib/client.ts";
 import {
   ROOT,
@@ -21,6 +21,12 @@ import {
   sleep,
 } from "./lib/core.ts";
 import { terminalHost, createPane, launchWindow } from "./lib/terminal.ts";
+import {
+  assignmentRequest,
+  position,
+  type HistoryEvent,
+  type Workflow,
+} from "./lib/workflow.ts";
 export async function main(argv = process.argv.slice(2)) {
   const { values: v, positionals } = parseArgs({
     args: argv,
@@ -91,6 +97,41 @@ export async function main(argv = process.argv.slice(2)) {
   );
   const client = new Comms();
   try {
+    if (task.metadata.workflow) {
+      const workflow = task.metadata.workflow as Workflow;
+      const step = workflow.steps.find((entry) => entry.id === request.stage);
+      if (!step || step.type !== "agent")
+        throw new Error(
+          `Stage ${request.stage} is not an agent step in this task's workflow`,
+        );
+      const expected = assignmentRequest(step, request.attempt);
+      if (
+        Object.entries(expected).some(
+          ([field, value]) => !isDeepStrictEqual(request[field], value),
+        ) ||
+        !isDeepStrictEqual(request.handoff, expected.handoff || {})
+      )
+        throw new Error(
+          `Dispatch request differs from workflow step ${step.id}; generate it with workflow.ts request`,
+        );
+      const events = await client.pages("list_events", "events", {
+        task_id: task.metadata.comms_id,
+      });
+      const current = position(
+        workflow,
+        events as HistoryEvent[],
+        task.directory,
+      );
+      if (
+        !fs.existsSync(receiptPath) &&
+        (current.state !== "ready" ||
+          current.step?.id !== step.id ||
+          current.attempt !== request.attempt)
+      )
+        throw new Error(
+          `Workflow is ${current.state} at ${current.step?.id || "end"}; cannot dispatch ${step.id}`,
+        );
+    }
     const record = await remoteTask(client, task.metadata);
     if (["complete", "cancelled"].includes(record.status))
       throw new Error("Task is terminal");

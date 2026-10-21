@@ -7,6 +7,7 @@ import {
   tasksRoot,
   loadFactory,
   selectFactory,
+  resolveReference,
 } from "./project.ts";
 export {
   projectRoot,
@@ -19,6 +20,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import lockfile from "proper-lockfile";
 import { Comms, type RecordValue } from "./client.ts";
+import { validateWorkflow } from "./workflow.ts";
 export const ROOT = toolkitRoot;
 export const id = () => randomUUID().replaceAll("-", "");
 export const hash = (value: string | Buffer) =>
@@ -60,6 +62,151 @@ export function strings(value: unknown, name: string): string[] {
     throw new Error(`${name} must list nonempty strings`);
   return value;
 }
+function agentBundle(directory: string, role: string) {
+  const profile = path.join(directory, "pi");
+  if (!fs.existsSync(path.join(profile, "settings.json"))) return undefined;
+  const settings = json(path.join(profile, "settings.json"));
+  const models = json(path.join(profile, "models.json"));
+  const mcp = json(path.join(profile, "mcp.json"));
+  if (!object(models.providers) || !object(mcp.mcpServers))
+    throw new Error(`Invalid Pi profile in ${directory}`);
+  if (
+    typeof settings.defaultProvider !== "string" ||
+    !settings.defaultProvider ||
+    typeof settings.defaultModel !== "string" ||
+    !settings.defaultModel
+  )
+    throw new Error(`Agent ${role} must configure its provider and model`);
+  const selectedProvider = models.providers[settings.defaultProvider];
+  if (
+    selectedProvider &&
+    !selectedProvider.models?.some(
+      (entry: RecordValue) => entry.id === settings.defaultModel,
+    )
+  )
+    throw new Error(`Agent ${role}'s model is not declared by its provider`);
+  const packages = settings.packages || [];
+  if (!Array.isArray(packages)) throw new Error("Pi packages must be an array");
+  const extensions: RecordValue = {};
+  const selected: string[] = [];
+  packages.forEach((pkg: unknown, index: number) => {
+    if (!object(pkg)) throw new Error("Pi package must be an object");
+    const name = `agent-package-${index}`;
+    const prepared = structuredClone(pkg);
+    if (
+      typeof prepared.source === "string" &&
+      (prepared.source.startsWith(".") || prepared.source.startsWith("~/"))
+    )
+      prepared.source = resolveReference(profile, prepared.source);
+    extensions[name] = prepared;
+    selected.push(name);
+  });
+  const skillsDir = path.join(directory, "skills");
+  const skills = fs.existsSync(skillsDir)
+    ? fs
+        .readdirSync(skillsDir)
+        .sort()
+        .map((name) => {
+          const file = fs.realpathSync(path.join(skillsDir, name, "SKILL.md"));
+          if (!fs.statSync(file).isFile())
+            throw new Error(`Invalid agent skill: ${name}`);
+          return file;
+        })
+    : [];
+  const mcps = Object.entries(mcp.mcpServers).flatMap(([name, server]) => {
+    if (!object(server)) throw new Error(`Invalid agent MCP: ${name}`);
+    return server.enabled === false && name !== "comms" ? [] : [name];
+  });
+  if (!mcps.includes("comms")) mcps.unshift("comms");
+  const nativeSettings = structuredClone(settings);
+  for (const key of [
+    "defaultProvider",
+    "defaultModel",
+    "defaultThinkingLevel",
+    "defaultTools",
+    "packages",
+  ])
+    delete nativeSettings[key];
+  return {
+    config: {
+      runner: "pi",
+      provider: settings.defaultProvider,
+      model: settings.defaultModel,
+      thinking: settings.defaultThinkingLevel,
+      tools: settings.defaultTools,
+      skills: [
+        ...(role === "coordinator"
+          ? [path.join(ROOT, "orchestrator/SKILL.md")]
+          : []),
+        path.join(ROOT, "orchestrator/comms/skills/task-comms/SKILL.md"),
+        ...skills,
+      ],
+      mcps,
+      extensions: selected,
+      pi: { settings: nativeSettings },
+    },
+    catalogs: { providers: models.providers, mcps: mcp.mcpServers, extensions },
+  };
+}
+function memberDefinition(
+  definition: RecordValue,
+  directory: string,
+  role: string,
+) {
+  const bundle = agentBundle(directory, role);
+  if (!bundle) return { definition, config: {} as RecordValue, bundled: false };
+  for (const name of Object.keys(definition.providers || {}))
+    if (name in bundle.catalogs.providers)
+      throw new Error(
+        `Factory provider ${name} would replace ${role}'s own provider`,
+      );
+  const effective: RecordValue = {
+    ...definition,
+    providers: merge(bundle.catalogs.providers, definition.providers || {}),
+    mcps: structuredClone(bundle.catalogs.mcps),
+    extensions: structuredClone(bundle.catalogs.extensions),
+  };
+  effective.mcps.comms = { ...effective.mcps.comms, enabled: true };
+  return { definition: effective, config: bundle.config, bundled: true };
+}
+function executionConfig(
+  definition: RecordValue,
+  member: RecordValue,
+  bundle: ReturnType<typeof memberDefinition>,
+) {
+  if (bundle.bundled) {
+    for (const field of Object.keys(member.config || {}))
+      if (!["provider", "model"].includes(field))
+        throw new Error(
+          `Bundled agent ${member.name} only accepts provider/model overrides`,
+        );
+    for (const field of ["skills", "mcps", "extensions"])
+      if (field in member)
+        throw new Error(`Bundled agent ${member.name} owns its ${field}`);
+  }
+  const defaults = bundle.bundled
+    ? Object.fromEntries(
+        ["executable", "check_timeout_seconds"]
+          .filter((key) => key in (definition.defaults || {}))
+          .map((key) => [key, definition.defaults[key]]),
+      )
+    : definition.defaults || {};
+  const config = merge(merge(defaults, bundle.config), member.config || {});
+  if (bundle.bundled && config.provider in bundle.definition.providers) {
+    const provider = bundle.definition.providers[config.provider];
+    if (
+      !Array.isArray(provider.models) ||
+      !provider.models.some((entry: RecordValue) => entry.id === config.model)
+    )
+      throw new Error(
+        `Model ${config.model} is not declared by provider ${config.provider}`,
+      );
+  }
+  if (!bundle.bundled)
+    for (const field of ["skills", "mcps", "extensions"])
+      if (field in member) config[field] = member[field];
+  return config;
+}
 export function factoryDefinition(name?: string) {
   if (name) selectFactory(name);
   const { definition } = loadFactory();
@@ -92,6 +239,7 @@ export function factoryDefinition(name?: string) {
         "agents",
         "terminal_host",
         "artifacts",
+        "workflow",
         "runtime_dir",
         "recipe",
       ].includes(field)
@@ -142,14 +290,10 @@ export function factoryDefinition(name?: string) {
       throw new Error("Agent path is required");
     const directory = fs.realpathSync(path.resolve(base, member.path));
     if (
-      !fs.existsSync(
-        path.join(
-          directory,
-          member.name === "coordinator" ? "SKILL.md" : "agent.md",
-        ),
-      )
+      !fs.existsSync(path.join(directory, "agent.md")) &&
+      !fs.existsSync(path.join(directory, "SKILL.md"))
     )
-      throw new Error("Agent path must reference its instructions");
+      throw new Error("Agent path must contain agent.md or SKILL.md");
     if (member.entrypoint !== undefined) {
       if (typeof member.entrypoint !== "string" || !member.entrypoint.trim())
         throw new Error(
@@ -179,9 +323,12 @@ export function factoryDefinition(name?: string) {
     for (const field of ["artifacts", "checks"])
       if (field in (member.handoff || {}))
         strings(member.handoff[field], field);
-    const resolved = merge(definition.defaults || {}, member.config || {});
-    for (const field of ["skills", "mcps", "extensions"])
-      if (field in member) resolved[field] = member[field];
+    const bundle = memberDefinition(definition, directory, member.name);
+    if (bundle.bundled && member.handoff)
+      throw new Error(
+        `Bundled agent ${member.name} uses workflow step handoff rules`,
+      );
+    const resolved = executionConfig(definition, member, bundle);
     if (
       resolved.env !== undefined &&
       (!object(resolved.env) ||
@@ -265,7 +412,7 @@ export function factoryDefinition(name?: string) {
       if (field in resolved) strings(resolved[field], field);
     for (const field of ["mcps", "extensions"])
       for (const ref of resolved[field] || [])
-        if (!(ref in (definition[field] || {})))
+        if (!(ref in (bundle.definition[field] || {})))
           throw new Error(`Unknown ${field}: ${ref}`);
     for (const ref of resolved.skills || []) {
       const file = fs.realpathSync(path.resolve(base, ref));
@@ -297,7 +444,7 @@ export function factoryDefinition(name?: string) {
           `Use explicit configuration instead of pi.settings.${key}`,
         );
     for (const ref of resolved.mcps || [])
-      if (!object(definition.mcps[ref]))
+      if (!object(bundle.definition.mcps[ref]))
         throw new Error("MCP definition must be an object");
     if (
       member.handoff &&
@@ -317,6 +464,12 @@ export function factoryDefinition(name?: string) {
   }
   if (!names.has(definition.owner))
     throw new Error("Factory owner must name a member");
+  if (definition.workflow !== undefined)
+    validateWorkflow(
+      definition.workflow,
+      [...names] as string[],
+      Object.keys(definition.artifacts || {}),
+    );
   return definition;
 }
 export function configuration(role: string, factory: string) {
@@ -324,11 +477,10 @@ export function configuration(role: string, factory: string) {
   const definition = factoryDefinition(factory),
     member = definition.agents.find((a: RecordValue) => a.name === role);
   if (!member) throw new Error(`Agent ${role} is not in ${factory}`);
-  const config = merge(definition.defaults || {}, member.config || {});
-  for (const key of ["skills", "mcps", "extensions"])
-    if (key in member) config[key] = member[key];
+  const bundle = memberDefinition(definition, member.path, member.name);
+  const config = executionConfig(definition, member, bundle);
   return {
-    definition,
+    definition: bundle.definition,
     member,
     config,
     directory: member.path,

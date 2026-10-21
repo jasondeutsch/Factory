@@ -1,8 +1,16 @@
 # Dispatch one assignment
 
-The coordinator uses `orchestrator/dispatch.ts` to open a visible member session through the configured terminal host, discover its actual participant, create an assignment, and check native delivery contact. The coordinator still chooses what happens next. This operation does not implement a workflow, grant approvals, or start a configured loop.
+The coordinator uses `orchestrator/dispatch.ts` to open a visible member session through the configured terminal host, discover its actual participant, create an assignment, and check native delivery contact. A task with a pinned workflow accepts only the current agent step's role, stage, attempt, inputs, instructions, and outputs. Dispatch does not grant approvals or start a configured loop.
 
-Write the intended assignment as JSON in the task's documents, for example:
+For a task with a pinned workflow, obtain the assignment from the resolver instead of writing it by hand:
+
+```sh
+node "$FACTORY_HOME/orchestrator/scripts/workflow.ts" status <task-directory>
+request_file=$(mktemp)
+node "$FACTORY_HOME/orchestrator/scripts/workflow.ts" request <task-directory> > "$request_file"
+```
+
+For a factory without a workflow, supply an explicit request file. Its shape is:
 
 ```json
 {
@@ -11,7 +19,7 @@ Write the intended assignment as JSON in the task's documents, for example:
   "instructions": "Prepare spec.html and plan.html for review. Do not implement.",
   "inputs": ["task brief"],
   "expected_output": ["spec.html", "plan.html"],
-  "stage": "design",
+  "stage": "specification",
   "attempt": 1
 }
 ```
@@ -20,7 +28,7 @@ From the coordinator's session, substitute actual paths and the active owner par
 
 ```sh
 node $FACTORY_HOME/orchestrator/dispatch.ts <task-directory> \
-  --request <assignment.json> --key design-1 --owner <owner-participant-id> \
+  --request "$request_file" --key specification-1 --owner <owner-participant-id> \
   --direction right
 ```
 
@@ -45,6 +53,6 @@ For Terminal/iTerm, opening a window has no returned pane identifier. An uncerta
 
 ## Handoff evidence
 
-Each factory member may declare `handoff` defaults next to its name/path/config. Dispatch copies these into the assignment unless its request explicitly supplies its own `handoff`. Changes after assignment creation do not weaken existing requirements. Supported fields are `require_artifacts`, `require_checks`, `require_limitations`, `artifacts` (exact required references), and `checks` (required `check.name` values). Direct MCP callers supply the same object to `create_assignment`.
+Each agent workflow step may declare `handoff` requirements. `workflow.ts request` includes them in the assignment, and dispatch rejects a request that changes them. Older factories without a workflow can still declare member handoff defaults. Changes after assignment creation do not weaken existing requirements. Supported fields are `require_artifacts`, `require_checks`, `require_limitations`, `artifacts` (exact required references), and `checks` (required `check.name` values). Direct MCP callers supply the same object to `create_assignment`.
 
 Submission checks the evidence shape before writing a result or notifying the owner. An empty limitations array explicitly means none known. Failed results can omit otherwise-required evidence but must explain the limitation; they are not successful gate completion. Check exit statuses are recorded honestly, including failures. Review judgment and human approvals remain separate.

@@ -39,3 +39,16 @@ func TestFailureCanReportMissingArtifacts(t *testing.T) {
 	err = validateResultEvidence(HandoffRequirements{}, AssignmentResult{Outcome: "failed"})
 	require.Error(t, err)
 }
+
+func TestReviewerCanRequestChanges(t *testing.T) {
+	s := testStore(t)
+	task := testTask(t, s, "review-changes")
+	owner := testParticipant(t, s, task, "coordinator")
+	reviewer := testParticipant(t, s, task, "reviewer")
+	a, err := s.CreateAssignment(t.Context(), CreateAssignmentInput{TaskID: task.ID, AssigningParticipant: owner.ID, Assignee: reviewer.ID, Title: "Review", Instructions: "Inspect changes", ExpectedOutput: []string{"findings"}, Stage: "review", Attempt: 1, RequestKey: "assign"})
+	require.NoError(t, err)
+	a = updateAssignment(t, s, a, reviewer, "accepted")
+	result, err := s.SubmitResult(t.Context(), SubmitResultInput{TaskID: task.ID, AssignmentID: a.ID, Actor: reviewer.ID, ExpectedVersion: a.Version, RequestKey: "review-result", Result: AssignmentResult{Outcome: "changes_requested", Summary: "Correct the edge case", NextAction: "Return to coder"}})
+	require.NoError(t, err)
+	assert.Equal(t, "changes_requested", result.Result.Outcome)
+}

@@ -13,7 +13,7 @@ Factory supplies coordination infrastructure; teams supply agents and factory co
 | Browser monitor and HTML reports | Inspect recorded status and evidence without a terminal client. | Bounded detail views; reports refresh on request. Unknown measurements remain unknown. |
 | Optional Herdr fallback bridge | Notify runners lacking a native delivery adapter. | Captured bindings and conservative recovery are required; never combine with Pi's native delivery for one recipient. |
 
-The coordinator chooses work from the team's recipe and communicates through comms. Delivery does not choose stages, grant approvals, or establish correct results. A member's instruction/skill selection is explicit in `factory.json`; merely installing a skill does not connect a tool.
+The coordinator reads the pinned workflow and communicates through comms. The resolver identifies the next step from assignment results and decisions; dispatch checks the current step before launching a worker. Delivery does not grant approvals or establish correct results. Agent bundles own their normal instruction, skill, model and tool selections; merely installing a skill does not connect a tool.
 
 The framework's task helper scaffolds only the `artifacts` declared in a selected factory. Its optional loop launch uses member configuration and actual artifact approvals; the selected extension owns iteration behavior. Application checks, ticket tools, model choices, prompts and review methods belong to the tools repository.
 

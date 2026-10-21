@@ -69,7 +69,7 @@ type CheckEvidence struct {
 
 // A result contains submitted claims, not independently verified work.
 type AssignmentResult struct {
-	Outcome     string          `json:"outcome" jsonschema:"ready_for_review, completed, or failed; does not change overall task status"`
+	Outcome     string          `json:"outcome" jsonschema:"ready_for_review, completed, changes_requested, or failed; does not change overall task status"`
 	Summary     string          `json:"summary"`
 	Artifacts   []string        `json:"artifacts,omitempty"`
 	Checks      []CheckEvidence `json:"checks,omitempty"`

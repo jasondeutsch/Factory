@@ -18,7 +18,7 @@ The recipient reads its inbox, acknowledges reading using its **routing identity
 
 Report meaningful progress/blockers through `update_assignment` with a fresh expected version, explanatory summary, and new request key. The orchestrator receives the generated notification. When waiting, name the needed input and responsible participant in the summary; send a concrete question through `send_message` when needed. Do not consume turns with empty-inbox polling.
 
-Send the final handoff using `submit_result`: outcome (`ready_for_review`, `completed`, or `failed`), summary, actual artifact/check references, limitations, and next action. It atomically notifies the orchestrator. Submitted results do not approve themselves, complete the task, or start another agent. The orchestrator decides subsequent assignments.
+Send the final handoff using `submit_result`: outcome (`ready_for_review`, `completed`, `changes_requested`, or `failed`), summary, actual artifact/check references, limitations, and next action. It atomically notifies the orchestrator. Submitted results do not approve themselves, complete the task, or start another agent. The coordinator follows the task's configured workflow to choose subsequent assignments.
 
 Use `list_assignments` with state/assignee filters when recovering outstanding work. Reuse the original request key and payload after an uncertain response. A replay returns the original response, which can be older than current state; fetch before a new action. Never restart work merely because a message was delivered again. Terminal assignments require an explicit new assignment for further work.
 

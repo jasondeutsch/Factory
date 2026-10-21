@@ -193,8 +193,8 @@ func (s *Store) SubmitResult(ctx context.Context, input SubmitResultInput) (Assi
 	if err := required("actor_participant_id", input.Actor, "result.summary", input.Result.Summary, "result.next_action", input.Result.NextAction); err != nil {
 		return Assignment{}, err
 	}
-	if !oneOf(input.Result.Outcome, "ready_for_review", "completed", "failed") {
-		return Assignment{}, errors.New("result outcome must be ready_for_review, completed, or failed")
+	if !oneOf(input.Result.Outcome, "ready_for_review", "completed", "changes_requested", "failed") {
+		return Assignment{}, errors.New("result outcome must be ready_for_review, completed, changes_requested, or failed")
 	}
 	for _, check := range input.Result.Checks {
 		if err := required("check.command", check.Command); err != nil {

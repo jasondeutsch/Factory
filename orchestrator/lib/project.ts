@@ -177,10 +177,18 @@ export function loadFactory(source = selectFactory()) {
     },
     toolkitRoot,
   );
-  return {
-    source,
-    definition: mergeConfig(baseline, source ? readConfig(source) : {}),
-  };
+  const selected = source ? readConfig(source) : {};
+  // A team coordinator replaces the framework fallback role instead of
+  // inheriting its skill selection.
+  if (
+    selected.agents?.some(
+      (member: Config) => member.name === "coordinator" && member.path,
+    )
+  )
+    baseline.agents = baseline.agents.filter(
+      (member: Config) => member.name !== "coordinator",
+    );
+  return { source, definition: mergeConfig(baseline, selected) };
 }
 export function runtimeRoot(source?: string) {
   const project = projectRoot();

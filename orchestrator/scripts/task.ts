@@ -19,6 +19,7 @@ import {
   event,
   inside,
 } from "../lib/core.ts";
+import { position, type HistoryEvent, type Workflow } from "../lib/workflow.ts";
 const escapeHTML = (text: string) =>
   text
     .replaceAll("&", "&amp;")
@@ -106,6 +107,7 @@ export async function attachRecord(
           name: record.name,
           factory,
           factory_config: process.env.FACTORY_CONFIG,
+          ...(definition.workflow ? { workflow: definition.workflow } : {}),
           brief: record.brief,
           owner: record.owner,
           created_at: record.created_at,
@@ -203,6 +205,20 @@ export async function main(args = process.argv.slice(2)) {
     let result: unknown;
     if (p[0] === "status") {
       const record = await remoteTask(client, metadata);
+      if (v.state === "complete" && metadata.workflow) {
+        const events = await client.pages("list_events", "events", {
+          task_id: metadata.comms_id,
+        });
+        const current = position(
+          metadata.workflow as Workflow,
+          events as HistoryEvent[],
+          directory,
+        );
+        if (current.state !== "complete")
+          throw new Error(
+            `Workflow is ${current.state} at ${current.step?.id || "end"}; task cannot be completed`,
+          );
+      }
       result = v.state
         ? await client.call("update_task", {
             task_id: record.id,
@@ -233,7 +249,40 @@ export async function main(args = process.argv.slice(2)) {
         { task_id: metadata.comms_id, message_id: p[2], actor: v.by },
       );
     else if (p[0] === "note" || p[0] === "decide") {
-      const artifacts = (v.artifact || []).map((ref) => {
+      let decisionStage: string | undefined;
+      let artifactNames = v.artifact || [];
+      if (p[0] === "decide" && metadata.workflow) {
+        const events = await client.pages("list_events", "events", {
+          task_id: metadata.comms_id,
+        });
+        const current = position(
+          metadata.workflow as Workflow,
+          events as HistoryEvent[],
+          directory,
+        );
+        if (current.state !== "decision" || current.step?.type !== "decision")
+          throw new Error(`No decision is currently due (${current.state})`);
+        if (v.by !== current.step.actor)
+          throw new Error(
+            `Decision ${current.step.id} requires actor ${current.step.actor}`,
+          );
+        if (!v.outcome || !current.step.on[v.outcome])
+          throw new Error(
+            `Outcome ${v.outcome || "(missing)"} is not routed from ${current.step.id}`,
+          );
+        const decision = current.step;
+        if (
+          artifactNames.length &&
+          (artifactNames.length !== decision.artifacts.length ||
+            artifactNames.some((name) => !decision.artifacts.includes(name)))
+        )
+          throw new Error(
+            `Decision ${current.step.id} requires its configured artifact set`,
+          );
+        decisionStage = current.step.id;
+        artifactNames = current.step.artifacts;
+      }
+      const artifacts = artifactNames.map((ref) => {
         const file = fs.realpathSync(path.resolve(directory, ref));
         if (!inside(directory, file))
           throw new Error("Decision artifact must be inside task");
@@ -248,16 +297,27 @@ export async function main(args = process.argv.slice(2)) {
         !["approve", "reject", "request_changes"].includes(v.outcome || "")
       )
         throw new Error("Invalid decision outcome");
-      result = await event(
-        client,
-        metadata,
-        v.by,
-        p[0] === "decide" ? "decision" : "note",
-        {
-          text: input("text"),
-          ...(p[0] === "decide" ? { outcome: v.outcome, artifacts } : {}),
-        },
-      );
+      const message = input("text");
+      result = decisionStage
+        ? await client.call("record_event", {
+            task_id: metadata.comms_id,
+            actor: v.by,
+            kind: "decision",
+            stage: decisionStage,
+            message,
+            data: { outcome: v.outcome, artifacts },
+            request_key: v["request-key"] || id(),
+          })
+        : await event(
+            client,
+            metadata,
+            v.by,
+            p[0] === "decide" ? "decision" : "note",
+            {
+              text: message,
+              ...(p[0] === "decide" ? { outcome: v.outcome, artifacts } : {}),
+            },
+          );
     } else
       throw new Error(
         "Commands: new, attach, status, send, inbox, ack, exec, decide, note",

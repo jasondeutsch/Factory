@@ -55,7 +55,7 @@ The panel uses a pinned image, runs as UID/GID `65532`, binds to loopback, and r
 
 ## Connect an agent
 
-Every supplied role already includes this connection in its native Pi `mcp.json`. An existing coordinator or another runner can configure the equivalent connection:
+Factory prepares this connection in managed Pi profiles. Standalone agents and existing coordinator sessions must configure the equivalent connection through their runner:
 
 ```json
 {
@@ -77,7 +77,7 @@ This shared token controls access to the service; it does not authenticate indiv
 
 ## MCP tools
 
-Task-scoped operations use an explicit task ID; creation and project listings use a project identifier instead; project identifiers are supplied strings, not paths that the container tries to discover. Task names can contain spaces and uppercase letters. Task IDs include a UTC timestamp and random suffix.
+Task-scoped operations use an explicit task ID. Creation and project listings use a project identifier. Identifiers are supplied strings; the container does not discover host paths. Task names can contain spaces and uppercase letters. Task IDs include a UTC timestamp and random suffix.
 
 | Tool | Required inputs | Result and behavior |
 | --- | --- | --- |
@@ -234,7 +234,7 @@ go build -mod=vendor -o /tmp/factory-monitor ./cmd/monitor
 
 The endpoint defaults to `http://127.0.0.1:8090/mcp`. Override it with `FACTORY_COMMS_URL` or `-url`. Set `COMMS_AUTH_TOKEN` if the service requires authentication. `-project` selects the exact project identifier recorded in Comms; existing local paths are resolved to absolute paths. The default is the calling directory.
 
-The display refreshes every three seconds. Overview highlights task status, open attention, active assignments, and agent contact. Comms shows observed sender-to-recipient routes and message contents; events shows recorded activity. Route counts represent each message's current **sent**, **read**, or **exec** state, not three cumulative totals. Contact is distinct from work progress; expired contact is unknown. No workflow stage or connection is inferred.
+The display refreshes every three seconds. Overview highlights task status, open attention, active assignments, and agent contact. Comms shows observed sender-to-recipient routes and message contents; events shows recorded activity. Route counts represent each message's current **sent**, **read**, or **exec** state, not three cumulative totals. Contact is distinct from work progress; expired contact is unknown. This monitor shows recorded activity; use the workflow resolver for the pinned graph and next step.
 
 | Key | Action |
 | --- | --- |

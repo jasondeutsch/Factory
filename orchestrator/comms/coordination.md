@@ -1,6 +1,6 @@
 # Participants and assignments
 
-The orchestrator agent decides who works, what to do next, and whether results satisfy the task. Comms records and validates the collaboration. It does not execute recipes, choose assignees, wake agents, or grant approvals.
+The coordinator follows the task's pinned workflow when one is configured, chooses the actual participant for its next agent step, and assesses evidence and user decisions. Comms records and validates the collaboration. It does not execute workflows, choose assignees, wake agents, or grant approvals.
 
 ## Identities
 
@@ -105,7 +105,7 @@ Only the active assignee can report acceptance, decline, progress, blockers, or 
 }
 ```
 
-Allowed outcomes are `ready_for_review`, `completed`, or `failed`. All produce assignment state `submitted`; the outcome distinguishes the reported result. A failed result is still a useful handoff, not a success. Check entries require a command and explicit exit status, with an optional `output_ref`. Record only checks actually executed. The service validates structure and ownership, not the truth of submitted evidence or approval authority.
+Allowed outcomes are `ready_for_review`, `completed`, `changes_requested`, or `failed`. All produce assignment state `submitted`; the outcome distinguishes the reported result. A reviewer uses `changes_requested` for actionable revision findings, which a configured workflow can route back to an earlier step. A failed result is still a useful handoff, not a success. Check entries require a command and explicit exit status, with an optional `output_ref`. Record only checks actually executed. The service validates structure and ownership, not the truth of submitted evidence or approval authority.
 
 Each successful assignment update/submission atomically stores its new version, a timeline event, and a notification to the assigning participant's routing identity. Cancellation notifies the assignee. The orchestrator reads the result and decides whether to review, assign repairs, seek input, or update overall task status. **Submission is not review, human approval, or task completion.**
 

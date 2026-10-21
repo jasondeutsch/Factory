@@ -16,6 +16,16 @@ node $FACTORY_HOME/orchestrator/scripts/task.ts attach <comms-task-id> --factory
 
 Create/attach validates the selected `factory.json`. `attach` checks project and configured owner, creates the local pointer and recipe-specific drafts, and returns the local path. Repeating it reuses the existing directory. A factory without an `artifacts` map gets no starter documents. An alternate `task.ts new --factory <configuration-file> --name "..." --brief "..." --request-key "..."` combines MCP creation and attachment when a shell-based coordinator needs it. It uses the same service and creates no separate mailbox. Long briefs use `--brief-file <file>` or `--brief-file -` with stdin; never interpolate user text as shell code.
 
+For a factory with `workflow`, attachment pins the selected step graph to the task. Inspect its position before assigning work or requesting a decision:
+
+```bash
+node "$FACTORY_HOME/orchestrator/scripts/workflow.ts" status <artifact-directory>
+request_file=$(mktemp)
+node "$FACTORY_HOME/orchestrator/scripts/workflow.ts" request <artifact-directory> > "$request_file"
+```
+
+`request` works only when an agent step is ready. It emits the exact role, stage, attempt, inputs, and expected outputs accepted by dispatch. `decision` requires the configured actor's actual decision; `active` means an assignment has not submitted a result. A `changes_requested` result follows the configured revision route. `$blocked` requires reconciliation; no route is inferred.
+
 To resume, use `list_tasks` with the explicit project and follow `before` pagination. Match the user's reference; ask when ambiguous. Find its local pointer in `<runtime_dir>/tasks/*/task.json`, or attach it if documents have not yet been scaffolded. Inspect remote status, all relevant inbox/event pages, and local reviews and progress. There is no global current-task pointer. Local documents do not restore a deleted database volume.
 
 ## Prepare visible sessions
@@ -26,7 +36,7 @@ Read-only configuration inspection:
 node $FACTORY_HOME/orchestrator/session.ts <member> <artifact-directory> --dry-run
 ```
 
-Read `cwd`, instructions, and `runner_configuration`. Configure per-member provider/model and native overrides in factory.json before launch; use --factory to select it for an unassigned session. A normal dry run has no network calls; `--loop` additionally **reads comms approval events**. Neither writes files. Task metadata displayed in an offline dry run comes from the local pointer; actual launch refreshes it from comms.
+Read `cwd`, instructions, and `runner_configuration`. Configure per-member provider/model overrides in factory.json before launch; use --factory to select it for an unassigned session. A normal dry run has no network calls; `--loop` additionally **reads comms approval events and the pinned workflow**. Neither writes files. Task metadata displayed in an offline dry run comes from the local pointer; actual launch refreshes it from comms.
 
 `--check` prepares a private native profile, reads task state, checks credentials and enabled MCP connections, and verifies extension command registration. It does not call a model. It can start MCP processes, contact services, or install the selected extension packages. Live launch performs these checks automatically. Failures remain visible through stderr and private diagnostics, with a comms failure event when possible. If the service itself is down, no remote event can be recorded; do not hide the original error.
 
@@ -40,7 +50,7 @@ For a configured loop launch, use the already registered member session, create 
 
 In Pi, call `factory_bind_task` after task attachment; it registers the actual instance and starts delivery. Other runners register an unassigned owner with its actual stable instance ID. Task-bound launchers register their workers after native checks; discover those actual IDs with `list_participants` before assigning work. Never register guessed worker identities. The owner's routing identity must equal the task's `owner`. Use `list_participants` to discover IDs; registration is not live availability. Find an existing matching instance registration after a context reset instead of inventing another instance.
 
-Use `create_assignment` with registered participant IDs, instructions, inputs, expected output, stage, attempt, and a stable request key. Retain its canonical ID. The service atomically creates its inbox notification and event. Workers acknowledge reading separately, accept/decline through `update_assignment`, report progress/blockers with versions, and hand off through `submit_result`. These writes notify the other participant atomically; do not manually duplicate them as ordinary messages or lifecycle events.
+Use `create_assignment` with registered participant IDs, the current workflow step's instructions, inputs, expected output, stage, attempt, and a stable request key. Retain its canonical ID. The service atomically creates its inbox notification and event. Workers acknowledge reading separately, accept/decline through `update_assignment`, report progress/blockers with versions, and hand off through `submit_result`. Reviewer results can use `changes_requested` to follow a configured revision route. These writes notify the other participant atomically; do not manually duplicate them as ordinary messages or lifecycle events.
 
 Use `get_assignment` and paginated `list_assignments` filters to inspect actual outstanding work. Stale versions require reconciliation, not blind overwrites. The orchestrator explicitly chooses follow-up review or repair assignments; submission never approves itself or completes the task. See [the coordination reference](../comms/coordination.md) for argument examples, allowed transitions, retries, and replacement.
 
@@ -59,7 +69,7 @@ node $FACTORY_HOME/orchestrator/scripts/task.ts decide <artifact-directory> --ou
   --artifact spec.html --artifact plan.html --text "Approved for implementation."
 ```
 
-Use the actual decision, deciding identity, and rationale. This is an agent operation, not a command to hand to the user. Alternatively hash the exact files and call `record_event` using the [shared skill's decision shape](../comms/skills/task-comms/SKILL.md). A decision message alone does not satisfy the launcher guard. Changed files, a later artifact-specific rejection, or an unscoped change request block a new loop until resolved. Declared actor names are not authenticated authority.
+Use the actual decision, deciding identity, and rationale. This is an agent operation, not a command to hand to the user. For a pinned workflow, the helper requires the currently due decision's actor and routed outcome; it includes the configured artifact set and stage automatically. A decision message alone does not satisfy the launcher guard. Changed approved files block progression. Declared actor names are not authenticated authority.
 
 ## Maintainer verification
 

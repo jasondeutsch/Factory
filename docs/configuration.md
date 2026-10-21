@@ -5,10 +5,7 @@ Project `factory.json` is optional. Launch from the application root; Factory an
 ```json
 {
   "extends": "../tools/factories/golang/factory.json",
-  "runtime_dir": "~/factory-runs/my-project",
-  "agents": [
-    { "name": "architect", "config": { "thinking": "high" } }
-  ]
+  "runtime_dir": "~/factory-runs/my-project"
 }
 ```
 
@@ -24,34 +21,35 @@ To add a worker from another checkout, include a new member in the project's `ag
 {
   "name": "security_reviewer",
   "path": "../team-agents/security-reviewer",
-  "skills": ["@factory/orchestrator/comms/skills/task-comms", "../team-skills/security"],
-  "config": { "thinking": "high", "tools": ["read", "bash", "grep", "find", "ls"] }
+  "entrypoint": "start.sh",
+  "config": { "provider": "team-gateway", "model": "review-model" }
 }
 ```
 
-The bundle contains `agent.md`. Its provider/model and selected MCPs inherit the factory defaults unless overridden. MCP definitions and extension packages remain named catalogs; declaring a tool does not automatically enable it for every worker.
+The bundle contains `agent.md`, `start.sh`, a `pi/` native profile and `skills/` links to the team’s canonical skill definitions. Managed sessions start with the bundle’s provider, model, tools, MCPs, extension packages and linked skills. A factory member can override provider/model when necessary; an override to a new custom provider needs a `providers` catalog entry in the factory.
 
 ## Shared defaults and member overrides
 
-A factory's `defaults` apply to all its members. A member's `config` overrides only what differs. Objects merge recursively; lists and scalar values replace. For managed launches, edit this resolved factory configuration rather than generated native profiles or standalone agent settings.
+For a bundle with a native `pi/` profile, those files and its linked skills own its execution configuration. A bundled member accepts only optional `provider` and `model` overrides. Framework launch defaults for `executable` and `check_timeout_seconds` still apply. Unbundled command runners retain the broader legacy configuration fields below. Edit the bundle for changes intended across all uses; never edit generated private profiles.
 
-For example, put your provider/model in `defaults` once. Give the architect `"config": {"model": "reasoning-model", "thinking": "high"}` when it needs another model. Add that model to the selected custom provider's `models` list. A member with no `config` uses the defaults; it does not need an empty object.
+For example, give the architect `"config": {"provider": "team-gateway", "model": "reasoning-model"}` when this factory needs another model. Define `team-gateway` under `providers` with that model ID if the bundle does not already contain it. A member with no `config` keeps its own native profile; it does not need an empty object.
 
-Member `skills`, `mcps`, and `extensions` select resources. If omitted, their defaults apply. An explicit list replaces the default list, so include `comms` in an MCP override. An empty list clears an optional selection; Pi sessions always require `comms`.
+An agent’s `skills/` links and native `pi/mcp.json` and `pi/settings.json` own its selections. Bundled agents cannot replace skills, MCPs, or extensions from the factory. Pi managed sessions always require `comms`. Unbundled runner definitions retain explicit resource selection for their adapter.
 
 | Factory field | Meaning |
 | --- | --- |
 | `name` | Logical identifier; independent of directory or filename. |
 | `extends` | Optional local base configuration path. |
-| `recipe` | Optional Markdown instructions file loaded into every selected session. |
+| `recipe` | Optional human-readable context loaded for the task owner. Workflow order and routing belong in `workflow`. |
 | `runtime_dir` | Optional project runtime directory. Default: `~/.factory/<project-name>-<path-hash>/runtime`. `FACTORY_RUNTIME_DIR` overrides it. |
 | `owner` | Member responsible for task coordination; defaults to `coordinator`. |
 | `terminal_host` | Optional `herdr`, `terminal`, or `iterm`. `FACTORY_TERMINAL_HOST` overrides this; automatic selection uses Herdr when inside it, otherwise Terminal on macOS. |
 | `defaults` | Shared execution settings and optional resource selections. |
-| `providers` | Named custom provider definitions in Pi's native provider format. Built-in providers need no entry. |
-| `mcps` | Named native MCP server definitions. Declaring one does not enable it for every agent. |
-| `extensions` | Named Pi package objects with a `source` field. Only selected packages are installed/loaded. The local Factory delivery extension is always loaded for Pi. |
+| `providers` | Optional factory provider definitions for workflow-specific provider/model overrides. Agent bundles define their normal provider in `pi/models.json`. |
+| `mcps` | MCP catalog for unbundled runners. Bundled agents use their own `pi/mcp.json`; Factory enables Comms for managed sessions. |
+| `extensions` | Package catalog for unbundled runners. Bundles select packages in `pi/settings.json`; Factory adds its delivery extension for managed Pi sessions. |
 | `artifacts` | Optional mapping of output HTML filenames to template paths relative to this factory file. Empty/omitted means no starter documents. |
+| `workflow` | Optional ordered step graph for coordinated tasks, pinned to each new task. Required by the supplied team factories. |
 | `agents` | Members, paths, selections, overrides, and optional handoff requirements. |
 
 | Member field | Meaning |
@@ -59,15 +57,13 @@ Member `skills`, `mcps`, and `extensions` select resources. If omitted, their de
 | `name` | Unique role name used for launch and communication. |
 | `path` | Directory containing `agent.md`, or `SKILL.md` for the coordinator. Relative to its declaring file, or absolute. |
 | `entrypoint` | Optional executable path inside the agent bundle, such as `start.sh`. For Pi runners, Factory calls it with prepared instructions, native profile and session arguments. Without it, Factory calls Pi directly. |
-| `config` | Optional execution overrides, using the fields below. |
-| `skills` | Paths to skill directories or entrypoint files, relative to its declaring file, or absolute. Include the shared task-comms skill. |
-| `mcps` | Names from the factory's `mcps` map. |
-| `extensions` | Names from the factory's `extensions` map. |
-| `handoff` | Assignment evidence defaults; see [dispatch](../orchestrator/references/dispatch.md). |
+| `config` | For a bundled agent, optional `provider` and `model` only. Unbundled runners use the execution fields below. |
+| `skills`, `mcps`, `extensions` | Explicit selections for unbundled runners only; bundled agents own these resources. |
+| `handoff` | Legacy assignment evidence defaults for unbundled runners. A bundled agent's evidence requirements belong on its workflow step. |
 
 ## Execution settings
 
-These belong in `defaults` or a member's `config`:
+These fields remain available for unbundled runners. Bundled agents configure them in their native profile, except for optional member `provider` and `model` overrides:
 
 | Field | Meaning |
 | --- | --- |
@@ -82,7 +78,6 @@ These belong in `defaults` or a member's `config`:
 | `auth_file_env`, `mcp_auth_file_env` | Environment variables containing absolute private native authentication-file paths. |
 | `args` | Additional permitted Pi flags. Cannot override model, tools, credentials, session ownership, or interactivity. |
 | `pi.settings` | Additional native settings, such as retry policy. Use the explicit fields above for model/tools and `extensions` for packages. |
-| `loop` | Optional Pi loop launch settings: `prompt`, `approval_artifacts`, and `commands`; described below. |
 | `command` | Command runner argv, including `{instructions_file}`. See [other runners](../orchestrator/README.md#other-runners). |
 
 ## Providers and credentials
@@ -95,9 +90,9 @@ Different members may select different providers and models. Only the selected c
 
 ## MCPs, skills, and extensions
 
-Define MCP servers once in `mcps`, then select them by name on each member. Define Pi extension packages once in `extensions`; selection controls which profiles load them. The framework adds its local delivery extension for every Pi session. Model/provider choices, skills, third-party tools and extension sources belong to your configuration, not the framework.
+Declare an agent’s MCPs in `agents/<name>/pi/mcp.json` and Pi extension packages in its `pi/settings.json`. Factory reads those files and adds Comms and its delivery extension for managed sessions. Agent models, skills and third-party tools live with the agent bundle.
 
-Skills are explicit file selections. `session.ts` reads the full selected `SKILL.md` entrypoints into the agent's system instructions, preserving source paths for supporting references. A skill does not install tools or register an MCP server.
+Each agent’s `skills/` entries link to definitions under the team’s shared `skills/` directory. `session.ts` loads the selected canonical `SKILL.md` files into the managed instructions, preserving their source paths for references. A skill does not install tools or register an MCP server.
 
 Comms is shared infrastructure: `FACTORY_COMMS_URL` and `COMMS_AUTH_TOKEN` are the launch environment's connection settings for both helpers and agents. The launcher applies them to each generated comms entry. They are not per-agent model settings.
 
@@ -108,7 +103,7 @@ From the application root, with `FACTORY_HOME` pointing to the framework checkou
 ```bash
 "$FACTORY_HOME/orchestrator/start.sh"
 node "$FACTORY_HOME/orchestrator/session.ts" architect --dry-run
-node "$FACTORY_HOME/orchestrator/session.ts" builder <task-directory>
+node "$FACTORY_HOME/orchestrator/session.ts" coder_golang <task-directory>
 ```
 
 Project `factory.json` is selected automatically. `--factory /path/to/factory.json` selects an external configuration instead. `--project /path/to/application` selects an explicit application root. A task records its configuration source for worker launches. There is no global coordinator profile or automatic newest-task selection. A conflicting factory/task pair fails.
@@ -121,7 +116,35 @@ See [how the configuration reaches Pi](../orchestrator/README.md#how-configurati
 
 A team may provide a Makefile with `install` and `update` for its tools. The framework Makefile installs shared runtime dependencies only. No installer schema or package ecosystem is introduced. Install affects the host, not an isolated toolchain.
 
-Edit the file selected by `recipe` for workflow agreements and `factory.json` for execution. Framework and team checkouts are [updated independently](toolkit-updates.md). Existing sessions retain their prepared configuration; launch a new session to apply changes. No migration guide or compatibility layer is provided for this prototype.
+Edit `factory.json` for step order, routing and execution settings; use `recipe` for explanatory team guidance. Framework and team checkouts are [updated independently](toolkit-updates.md). Existing tasks retain their pinned workflow; existing sessions retain their prepared configuration. Launch a new session to apply agent changes.
+
+## Workflow steps and decisions
+
+`workflow.start` names the first step. Each `workflow.steps` entry has a unique lowercase `id` and a `type` of `agent` or `decision`. The workflow lists all outcome routes explicitly; `$done` and `$blocked` are terminal targets. Missing outcome routes block progression. Unreachable steps, unknown members or artifacts, and invalid targets fail configuration validation.
+
+```json
+"workflow": {
+  "start": "draft",
+  "steps": [
+    {
+      "id": "draft", "type": "agent", "agent": "architect",
+      "title": "Draft proposal", "instructions": "Develop the proposal from the task brief.",
+      "inputs": ["task brief", "project source"],
+      "outputs": ["spec.html", "plan.html"],
+      "on": { "completed": "approval", "failed": "$blocked" }
+    },
+    {
+      "id": "approval", "type": "decision", "actor": "human",
+      "artifacts": ["spec.html", "plan.html"],
+      "on": { "approve": "$done", "request_changes": "draft", "reject": "$blocked" }
+    }
+  ]
+}
+```
+
+Agent results may be `completed`, `ready_for_review`, `changes_requested`, or `failed`. Decisions may be `approve`, `request_changes`, or `reject`. A decision actor is `human` or a named factory member. Its `artifacts` must be declared in the factory's `artifacts` map; an approval records and rechecks their exact hashes. Changing an approved artifact reopens that decision and requires a new approval before another agent step; subsequent work uses a new attempt number. Use the `changes_requested` result and route to loop back after a reviewer finds material problems. Agent steps may also declare `handoff` evidence requirements (`require_artifacts`, `require_checks`, `require_limitations`, and optional exact `artifacts`/`checks` lists) and an optional `loop` launch policy. The agent bundle still owns its skills, model, MCPs and extension packages.
+
+The coordinator checks `node "$FACTORY_HOME/orchestrator/scripts/workflow.ts" status <task-directory>` for the current step. For a ready agent step, `workflow.ts request <task-directory>` emits the exact JSON request for `dispatch.ts --request <file>`. Dispatch rejects requests that differ from the pinned step or arrive out of order. The decision helper accepts only the due decision's actor, routed outcome, and configured artifact set. Task completion through the helper requires the `$done` route. These checks live in the Factory helpers; a client writing directly to Comms must follow the same contract. The coordinator still drives sessions and handles human conversation; this is not an automatic scheduler.
 
 ## Task document templates
 
@@ -136,7 +159,7 @@ Edit the file selected by `recipe` for workflow agreements and `factory.json` fo
 
 ## Optional Pi loop launch
 
-A member may set this in `config` (or inherit it from `defaults`):
+An agent step may set this workflow-specific launch policy. The agent bundle owns the Pi extension package and bounded-iteration skill:
 
 ```json
 "loop": {
@@ -146,7 +169,7 @@ A member may set this in `config` (or inherit it from `defaults`):
 }
 ```
 
-`--loop N` requires an explicit task, a Pi runner, positive iterations, configured loop settings, and current hash-matching approval of every listed artifact. Those artifacts must exist in the factory's `artifacts` map. The launcher checks the named native commands and waits for an assignment before starting; it substitutes `{iterations}` and `{task_dir}` in the prompt. The selected extension defines actual iteration behavior. No factory or member name activates a loop automatically. This is a launch guard, not a workflow scheduler or a continuous approval monitor.
+`--loop N` requires an explicit task at that agent step, a Pi runner, positive iterations, the step's `loop` settings, and current hash-matching approval of every listed artifact. Those artifacts must exist in the factory's `artifacts` map. The launcher checks the named native commands and waits for an assignment before starting; it substitutes `{iterations}` and `{task_dir}` in the prompt. The agent's extension defines actual iteration behavior. No factory or member name activates a loop automatically. This is a launch guard, not a workflow scheduler or a continuous approval monitor.
 
 ## Runtime ownership
 
@@ -163,4 +186,4 @@ An agent entrypoint must not call back into Factory. For a Pi member with `"entr
 
 The entrypoint forwards arguments unchanged, preserves the working directory and environment, and uses `exec` so signals and exit status belong to the runner. No Factory import, installation path or role name is required in the entrypoint. The path is explicit in member configuration; Factory does not guess from the presence of `start.sh`. Command runners continue to use `config.command` and its placeholders.
 
-Standalone launchers use their bundle's instructions/skills and native Pi configuration. They do not resolve `factory.json`, register participants or add Comms. Native model/MCP settings must be configured by the user. This keeps one configuration owner per launch: Pi for standalone sessions, Factory's prepared profile for managed sessions.
+Standalone launchers use their bundle’s instructions, linked skills and copied native Pi profile. They do not resolve `factory.json`, register participants or enable Comms by default. Edit the bundle’s `pi/` files for its normal model and MCP selection. This keeps one configuration owner per launch: Pi for standalone sessions, Factory's prepared profile for managed sessions.

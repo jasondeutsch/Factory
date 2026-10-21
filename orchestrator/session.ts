@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { position, type HistoryEvent, type Workflow } from "./lib/workflow.ts";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { Comms, type RecordValue } from "./lib/client.ts";
@@ -43,7 +44,14 @@ export async function approved(
     )
       continue;
     const decision = record.data;
-    if (!decision.artifacts?.length && decision.outcome !== "approve")
+    const scoped = (metadata.workflow as Workflow | undefined)?.steps.some(
+      (step) => step.type === "decision" && step.id === record.stage,
+    );
+    if (
+      !scoped &&
+      !decision.artifacts?.length &&
+      decision.outcome !== "approve"
+    )
       for (const name of artifacts)
         latest[name] = { outcome: decision.outcome };
     for (const artifact of decision.artifacts || [])
@@ -75,10 +83,10 @@ export function prepare(
     role,
     instance,
   );
-  const instruction = path.join(
-    directory,
-    role === "coordinator" ? "SKILL.md" : "agent.md",
-  );
+  const roleFile = path.join(directory, "agent.md");
+  const instruction = fs.existsSync(roleFile)
+    ? roleFile
+    : path.join(directory, "SKILL.md");
   const skills = (config.skills || []).map((ref: string) => {
     const p = fs.realpathSync(path.resolve(base, ref));
     return fs.statSync(p).isDirectory() ? path.join(p, "SKILL.md") : p;
@@ -138,9 +146,14 @@ export function prepare(
   instructions +=
     "Workers wait for an explicit assignment. Startup grants no approval. Comms is authoritative for state. Use factory_read_message to retrieve inbox notifications; call factory_exec_message immediately before acting. Completion is recorded through assignment results.\n";
   instructions += `\n## Factory membership\n${JSON.stringify(membership, null, 2)}\n`;
+  const workflow = task?.metadata.workflow || definition.workflow;
+  if (workflow)
+    instructions += `\n## Workflow definition (authoritative)\n${JSON.stringify(workflow, null, 2)}\nUse workflow.ts status before dispatching or recording a decision. Follow these steps and outcome routes; the recipe below is explanatory context.\n`;
   for (const file of [
     instruction,
-    ...(definition.recipe ? [definition.recipe] : []),
+    ...(role === definition.owner && definition.recipe
+      ? [definition.recipe]
+      : []),
     ...skills,
   ])
     instructions += `\n## Source file: ${file}\nSource directory for relative references: ${path.dirname(file)}\n\n${fs.readFileSync(file, "utf8")}\n`;
@@ -342,10 +355,31 @@ export async function main(argv = process.argv.slice(2)) {
     if (typeof timeout !== "number" || timeout <= 0 || timeout > 300)
       throw new Error("Invalid check_timeout_seconds");
     const loop = values.loop ? Number(values.loop) : undefined;
+    let loopPolicy = plan.config.loop;
     if (loop !== undefined) {
+      if (task?.metadata.workflow) {
+        const events = await client.pages("list_events", "events", {
+          task_id: task.metadata.comms_id,
+        });
+        const current = position(
+          task.metadata.workflow as Workflow,
+          events as HistoryEvent[],
+          task.directory,
+        );
+        if (
+          !current.step ||
+          current.step.type !== "agent" ||
+          current.step.agent !== role ||
+          !["ready", "active"].includes(current.state)
+        )
+          throw new Error(
+            `Loop cannot start while workflow is ${current.state} at ${current.step?.id || "end"}`,
+          );
+        loopPolicy = current.step.loop;
+      }
       if (
         !task ||
-        !plan.config.loop ||
+        !loopPolicy ||
         !plan.profile ||
         !Number.isInteger(loop) ||
         loop < 1
@@ -357,9 +391,9 @@ export async function main(argv = process.argv.slice(2)) {
         client,
         task.metadata,
         task.directory,
-        plan.config.loop.approval_artifacts,
+        loopPolicy.approval_artifacts,
       );
-      plan.command[plan.command.length - 1] = plan.config.loop.prompt
+      plan.command[plan.command.length - 1] = loopPolicy.prompt
         .replaceAll("{iterations}", String(loop))
         .replaceAll("{task_dir}", task.directory);
     }
@@ -395,7 +429,7 @@ export async function main(argv = process.argv.slice(2)) {
         checkEnv,
         plan.project,
         timeout * 1000,
-        loop ? plan.config.loop.commands : [],
+        loop ? loopPolicy.commands : [],
       );
       plan.manifest.startup_checked = true;
     } else if (values.check)
@@ -433,7 +467,7 @@ export async function main(argv = process.argv.slice(2)) {
             client,
             task.metadata,
             task.directory,
-            plan.config.loop.approval_artifacts,
+            loopPolicy.approval_artifacts,
           );
           const assignments = await client.pages(
             "list_assignments",

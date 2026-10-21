@@ -1,6 +1,6 @@
 # Agent startup and configuration
 
-The configuration you edit is project **`factory.json`**, optionally extending an external team configuration. It contains shared defaults and member overrides, plus named providers, MCPs, extensions, and skill selections. The [factory reference](../docs/configuration.md) documents every field. Agent directories contain behavior and reusable resources, not competing configuration files.
+The project’s **`factory.json`** selects a team factory and optional overrides. Each external agent bundle owns its instructions, native Pi provider/model/MCP/extension profile and linked skills. Factory reads those files for managed sessions, then applies explicit member overrides. The [configuration reference](../docs/configuration.md) documents both layers.
 
 ## Two ways to start coordinating
 
@@ -60,14 +60,15 @@ The prepared Pi coordinator includes automatic inbox delivery. An existing sessi
 
 ### Observe either mode
 
-Run `"$FACTORY_HOME/orchestrator/monitor.sh"` from the application root for the terminal monitor, or open [the browser monitor](http://127.0.0.1:8090/monitor) and select the project and task. The terminal client requires Go 1.26+ or a prebuilt monitor executable, and an already running Comms service. See [controls and connection settings](comms/README.md#terminal-monitor). It shows recorded assignments, participants, messages and attention items. Port 8091 is the SQLite administration panel, not the workflow monitor. You can also ask the coordinating agent for status. Both modes keep Factory artifacts under the configured runtime directory and use the same Comms records.
+Run `"$FACTORY_HOME/orchestrator/monitor.sh"` from the application root to see tasks, agents, attention items and message routes in the terminal. The source launcher requires Go 1.26+ and an already running Comms service; a prebuilt binary avoids the Go requirement. See [controls and connection settings](comms/README.md#terminal-monitor). The [browser monitor](http://127.0.0.1:8090/monitor) shows recorded status too. Port 8091 is the SQLite administration panel. You can also ask the coordinating agent for status. Both monitors read the same Comms records.
 
 ## How configuration reaches Pi
 
 Pi does not read `factory.json`. Factory's TypeScript entrypoint **[session.ts](session.ts)** translates it into Pi's native files before starting each agent:
 
 ```text
-factory.json: defaults + selected member
+agent bundle: pi/*.json + skills/ links
+factory.json: membership + optional overrides
                  |
                  v
 session.ts resolves configuration, instructions, and skills
@@ -84,11 +85,11 @@ Pi starts with PI_CODING_AGENT_DIR=<session>/pi
 and --append-system-prompt <session>/instructions.md
 ```
 
-The Pi translation and native startup checks live in [lib/pi.ts](lib/pi.ts). Each agent gets its own directory, model configuration, tools, and session transcript. Files are private launch output under `~/.factory/<project-name>-<path-hash>/runtime`, or an absolute `FACTORY_RUNTIME_DIR`. **Do not edit generated files to configure future launches.** Change the factory file instead.
+The Pi translation and native startup checks live in [lib/pi.ts](lib/pi.ts). Each agent gets its own directory, model configuration, tools, and session transcript. Files are private launch output under `~/.factory/<project-name>-<path-hash>/runtime`, or an absolute `FACTORY_RUNTIME_DIR`. **Do not edit generated files to configure future launches.** Change the agent bundle’s authored `pi/` files or the factory’s explicit overrides.
 
-There are two configuration levels: factory defaults, then member overrides. Objects merge recursively; lists replace. Member resource selections replace their defaults. Project overrides are merged before member settings are resolved. With no configuration file, the built-in coordinator uses native Pi provider/model defaults.
+Managed sessions read the agent bundle first, then apply factory fallback values and explicit member overrides. Agent skill links and native Pi files supply the normal provider, model, tools, MCPs and packages. A factory member normally needs only `name`, `path` and `entrypoint`, plus workflow handoff rules. With no team configuration, the framework’s built-in coordinator uses native Pi provider/model defaults.
 
-The launcher appends the role instruction, selected factory recipe, and every selected skill entrypoint to the system instructions. Supporting documents retain their source directory for relative links. Raw provider/MCP configuration is not copied into model instructions.
+The launcher includes the pinned task workflow (or the selected factory workflow for an unassigned session), role instructions, and every selected skill entrypoint. It includes the recipe for the task owner as explanatory context. Supporting documents retain their source directory for relative links. Raw provider/MCP configuration is not copied into model instructions.
 
 ## Which script runs
 
@@ -106,7 +107,7 @@ From the application root:
 ```bash
 $FACTORY_HOME/orchestrator/start.sh --factory /path/to/tools/factories/team/factory.json
 node $FACTORY_HOME/orchestrator/session.ts architect --factory /path/to/tools/factories/team/factory.json
-node $FACTORY_HOME/orchestrator/session.ts builder <task-directory>
+node $FACTORY_HOME/orchestrator/session.ts coder_golang <task-directory>
 ```
 
 Without a task, project `factory.json` is used, or an explicit `--factory` path. With neither, only the built-in coordinator is available. With a task directory, its recorded factory is used; a conflicting `--factory` fails. No session selects the newest task automatically. Launch workers in their visible panes through [dispatch](references/dispatch.md), not in the coordinator's blocking shell.
@@ -167,4 +168,4 @@ Pi model/tool settings inherited from factory defaults do not apply to command r
 
 ## Add a member
 
-Create a directory with `agent.md`, skills/scripts as needed, and an optional standalone runner entrypoint. Set the member's `entrypoint` to its relative path to use it during managed Pi launches; the script must not call `session.ts`. Add its name, relative path, resource selections, and any execution overrides to the factory file. Keep the recipe human-readable. Task templates and loop settings come from the selected factory; names and directory placement do not imply behavior.
+Create an agent bundle with `agent.md`, a `pi/` native profile, `skills/` links, scripts as needed and a standalone `start.sh`. Point the factory member at the bundle and entrypoint. Factory reads its profile and skills for managed Pi sessions. Set only workflow-specific model/provider overrides and handoff or loop rules in the factory. The bundle entrypoint must not call `session.ts`.
