@@ -9,6 +9,7 @@ import { prepareProfile, check, type Profile } from "../lib/pi.ts";
 import { terminalHost, shellQuote } from "../lib/terminal.ts";
 import { measurements } from "../adapters/pi/import_usage.ts";
 import { synchronize } from "../scripts/sync_toolkit.ts";
+import type { RecordValue } from "../lib/client.ts";
 let f: Awaited<ReturnType<typeof fixture>>;
 before(async () => {
   f = await fixture();
@@ -801,21 +802,39 @@ test("circular configuration inheritance fails before runtime writes", async () 
 });
 
 test("no project config can launch the built-in coordinator preview", async () => {
-  const preview = JSON.parse(
-    (await f.cli("orchestrator/session.ts", ["coordinator", "--dry-run"]))
-      .stdout,
-  );
+  const settingsPath = path.join(f.toolkit, "orchestrator/agent/pi/settings.json");
+  const modelsPath = path.join(f.toolkit, "orchestrator/agent/pi/models.json");
+  const originalSettings = fs.readFileSync(settingsPath);
+  const originalModels = fs.readFileSync(modelsPath);
+  let preview: RecordValue;
+  try {
+    const settings = json(settingsPath);
+    settings.defaultProvider = "custom-provider";
+    settings.defaultModel = "custom-model";
+    writeJSON(settingsPath, settings);
+    const models = json(modelsPath);
+    models.providers["custom-provider"] = {
+      api: "openai-completions",
+      baseUrl: "http://127.0.0.1:1/v1",
+      apiKey: "${CUSTOM_KEY}",
+      models: [{ id: "custom-model" }],
+    };
+    writeJSON(modelsPath, models);
+    preview = JSON.parse(
+      (await f.cli("orchestrator/session.ts", ["coordinator", "--dry-run"])).stdout,
+    );
+  } finally {
+    fs.writeFileSync(settingsPath, originalSettings);
+    fs.writeFileSync(modelsPath, originalModels);
+  }
   assert.equal(preview.configuration_source, "built-in coordinator");
   assert.equal(preview.cwd, f.project);
   assert.equal(
     preview.command[0],
     path.join(f.toolkit, "orchestrator/agent/start.sh"),
   );
-  assert.equal(preview.runner_configuration.provider, "openrouter");
-  assert.equal(
-    preview.runner_configuration.model,
-    "deepseek/deepseek-v4-flash",
-  );
+  assert.equal(preview.runner_configuration.provider, "custom-provider");
+  assert.equal(preview.runner_configuration.model, "custom-model");
   assert.equal(
     preview.skills.filter((file: string) =>
       file.endsWith("/orchestrator/SKILL.md"),

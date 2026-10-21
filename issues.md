@@ -239,3 +239,9 @@ For members attached to a workflow step with a loop, the Pi delivery adapter che
 **Status:** Implemented in Factory Tools
 
 The Go factory's install and update targets now fail if `gopls` was installed but is not on the launching shell's `PATH`, with the Go binary directory in the error. The example documentation calls out this common `go install` behavior. This catches the mismatch before an agent session tries to start its gopls MCP connection; the Factory session check still verifies the actual MCP connection.
+
+## FACT-023 — Make developer verification independent of runtime installation
+
+**Status:** Implemented
+
+`make verify` installs the full Node development dependency set, then runs TypeScript checking, the TypeScript test suite, and Go tests. Runtime installation can continue using production dependencies only. The coordinator preview test changes its copied native Pi profile and confirms the launcher uses that selected provider and model, avoiding an OpenRouter-specific assertion that fails when teams customize the profile.

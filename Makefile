@@ -1,4 +1,4 @@
-.PHONY: install update start
+.PHONY: install update start verify
 
 install:
 	brew install herdr git go node
@@ -11,6 +11,12 @@ update:
 	pi update self
 	npm ci --omit=dev
 	cd orchestrator/comms && go mod download
+
+verify:
+	npm ci
+	npm run check
+	npm test
+	cd orchestrator/comms && go test ./...
 
 start:
 	./orchestrator/start.sh $(if $(PROJECT),--project "$(PROJECT)") $(if $(FACTORY),--factory "$(FACTORY)")

@@ -1,6 +1,6 @@
 # Coordination verification
 
-From the toolkit root:
+From the toolkit root, `make verify` installs the development dependencies (including TypeScript), checks the code, and runs the TypeScript and Go suites. The runtime `make install`/`npm ci --omit=dev` omits the compiler, so use the full install before running checks manually:
 
 ```sh
 npm ci
