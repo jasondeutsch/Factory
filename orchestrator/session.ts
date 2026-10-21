@@ -67,6 +67,23 @@ export async function approved(
     )
       throw new Error(`Loop requires approval of current ${name}`);
 }
+export function startupFailureSummary(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const known = [
+    /^Pi (credentials|mcp|extensions) startup check failed/,
+    /^Pi command unavailable: [a-zA-Z0-9_-]+/,
+    /^Pi credentials not ready/,
+    /^MCP [a-zA-Z0-9_-]+ not connected/,
+    /^Invalid MCP readiness/,
+    /^Missing environment variable: [A-Z][A-Z0-9_]*/,
+    /^Environment variable required by [a-zA-Z0-9_-]+: [A-Z][A-Z0-9_]*/,
+    /^No assignment arrived before loop startup timeout/,
+    /^Loop requires approval of current [a-zA-Z0-9_.-]+/,
+    /^Agent process exited with status [0-9]+/,
+  ];
+  const match = known.map((pattern) => message.match(pattern)?.[0]).find(Boolean);
+  return match || "Worker startup failed; inspect its private diagnostics";
+}
 export function prepare(
   role: string,
   factory: string,
@@ -344,6 +361,7 @@ export async function main(argv = process.argv.slice(2)) {
     throw new Error("Invalid instance ID");
   const client = new Comms();
   let participant: RecordValue | undefined;
+  let runnerStarted = false;
   try {
     if (task && !values["dry-run"]) {
       const remote = await remoteTask(client, task.metadata);
@@ -489,13 +507,22 @@ export async function main(argv = process.argv.slice(2)) {
       }
     }
     await client.close();
-    process.exitCode = await interactive(plan.command, plan.project, plan.env);
+    runnerStarted = true;
+    const exitCode = await interactive(plan.command, plan.project, plan.env);
+    if (exitCode !== 0)
+      throw new Error(`Agent process exited with status ${exitCode}`);
   } catch (error) {
-    if (task)
-      await event(client, task.metadata, role, "session_startup_failed", {
+    if (task) {
+      const summary = startupFailureSummary(error);
+      const reporter = new Comms();
+      await event(reporter, task.metadata, role, runnerStarted ? "session_runner_failed" : "session_startup_failed", {
         participant_id: participant?.id,
-        error: "Session startup failed; inspect private runtime diagnostics",
+        instance_id: values["instance-id"],
+        text: summary,
+        error: summary,
       }).catch(() => {});
+      await reporter.close().catch(() => {});
+    }
     throw error;
   } finally {
     await client.close().catch(() => {});

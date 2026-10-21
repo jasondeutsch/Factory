@@ -58,7 +58,7 @@ For managed workers, use dispatch or `node "$FACTORY_HOME/orchestrator/session.t
 | Task status says cancelled but work continues | Stop the active runner through native controls. Status is a record, not a process-control signal. Inspect partial changes afterward. |
 | A factory-specific check stops early | Inspect its script and actual output in the tools checkout. Check ordering and supported project layouts are defined by that factory, not by the framework. |
 
-Startup failures after native checking begins create `session_startup_failed` task events with a private runtime directory. Inspect its `startup-checks.json` carefully; it can contain sensitive native diagnostics. Configuration or approval errors that occur earlier appear on stderr and need not have that event. Explain the actual failure to the user without echoing credentials.
+Worker startup failures and nonzero runner exits create task failure events with an instance ID and a safe summary. Dispatch reports a matching failure while waiting for registration or inbox contact. Inspect the worker pane and private `startup-checks.json` for details; that file can contain sensitive native diagnostics. Configuration or approval errors may occur before a participant registers, but a task-bound session still records a failure event when Comms is reachable.
 
 ## Updating the toolbox
 

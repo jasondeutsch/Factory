@@ -166,6 +166,19 @@ export async function main(argv = process.argv.slice(2)) {
           receipt.phase = phase;
           writeJSON(receiptPath, receipt);
         };
+        const startupFailure = async () => {
+          const events = await client.pages("list_events", "events", {
+            task_id: record.id,
+          });
+          const failure = events.findLast(
+            (entry) =>
+              ["session_startup_failed", "session_runner_failed"].includes(
+                entry.data?.event_type,
+              ) &&
+              entry.data?.instance_id === receipt.instance_id,
+          );
+          return failure?.message as string | undefined;
+        };
         try {
           let participant: RecordValue | undefined;
           if (v["reuse-participant"]) {
@@ -242,11 +255,16 @@ export async function main(argv = process.argv.slice(2)) {
               save("launch_confirmed");
             }
             const deadline = Date.now() + timeout * 1000;
+            let polls = 0;
             do {
               participant = (await participants()).find(
                 (p) => p.instance_id === receipt.instance_id && !p.retired_at,
               );
               if (participant) break;
+              if (++polls % 4 === 0) {
+                const failure = await startupFailure();
+                if (failure) throw new Error(`Worker startup failed: ${failure}`);
+              }
               if (Date.now() > deadline)
                 throw new Error(
                   "No actual participant registered. Inspect the visible session; retry never resends its launch.",
@@ -259,6 +277,7 @@ export async function main(argv = process.argv.slice(2)) {
             (config.runner || "pi") === "pi" || config.delivery === "native";
           if (nativeDelivery) {
             const deadline = Date.now() + timeout * 1000;
+            let polls = 0;
             for (;;) {
               const snapshot = await client
                 .call("get_session", {
@@ -272,6 +291,10 @@ export async function main(argv = process.argv.slice(2)) {
                   (receipt.assignment_id && snapshot.contact_state === "working"))
               )
                 break;
+              if (++polls % 2 === 0) {
+                const failure = await startupFailure();
+                if (failure) throw new Error(`Worker startup failed: ${failure}`);
+              }
               if (Date.now() > deadline)
                 throw new Error(
                   "Worker registered but its native inbox has no fresh contact; no assignment was created. Inspect the session and retry this dispatch.",

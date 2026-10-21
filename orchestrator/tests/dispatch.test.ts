@@ -24,6 +24,23 @@ test("dispatch retries reconcile the actual instance without duplicate launches 
     ])
   ).stdout.trim();
   const metadata = json(path.join(directory, "task.json"));
+  const failedInstance = "f".repeat(32);
+  await assert.rejects(
+    f.cli("orchestrator/session.ts", [
+      "missing",
+      directory,
+      "--factory",
+      "sample",
+      "--instance-id",
+      failedInstance,
+    ]),
+  );
+  const startupEvent = (await f.client.pages("list_events", "events", {
+    task_id: metadata.comms_id,
+  })).find((item) => item.data?.instance_id === failedInstance);
+  assert.equal(startupEvent?.kind, "failure");
+  assert.equal(startupEvent?.data?.event_type, "session_startup_failed");
+  assert.match(startupEvent?.message || "", /Worker startup failed/);
   const owner = await f.client.call("register_participant", {
     task_id: metadata.comms_id,
     role: "coordinator",
@@ -108,6 +125,20 @@ if(args[1]==='run'){
   const worker = (await f.client.pages("list_participants", "participants", {
     task_id: metadata.comms_id,
   })).find((participant) => participant.role === "designer")!;
+  await f.client.call("record_event", {
+    task_id: metadata.comms_id,
+    actor: "designer",
+    kind: "failure",
+    message: "Pi credentials startup check failed",
+    data: {
+      event_type: "session_startup_failed",
+      instance_id: worker.instance_id,
+    },
+  });
+  await assert.rejects(
+    f.cli("orchestrator/dispatch.ts", args, env),
+    /Worker startup failed: Pi credentials startup check failed/,
+  );
   await f.client.call("record_runner_contact", {
     task_id: metadata.comms_id,
     participant_id: worker.id,

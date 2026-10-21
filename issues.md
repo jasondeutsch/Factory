@@ -215,3 +215,9 @@ Dispatch waits for a fresh native inbox contact after a worker registers and bef
 **Status:** Implemented
 
 A Herdr pane launch writes a private marker only after its shell begins executing the submitted command. Dispatch waits for that marker before accepting participant registration as launch success. If Herdr accepts a command but the pane never runs it, the receipt identifies the launch failure and retry does not submit another command automatically. This protects against duplicate workers while making the failure distinct from missing registration or inbox contact. A live Herdr check remains necessary because the automated test uses a pane fixture.
+
+## FACT-019 — Surface worker failures to the coordinator
+
+**Status:** Implemented
+
+Session startup and nonzero runner exits record a task failure event with the instance ID and a redacted, actionable summary. Dispatch reads matching failures while waiting for registration or native inbox contact and includes the summary in its receipt. This makes a failed credential or MCP check visible in the monitor and to the coordinator without copying private subprocess output or credentials into Comms. The worker pane and private `startup-checks.json` retain detailed diagnostics.
