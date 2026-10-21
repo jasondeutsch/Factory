@@ -206,6 +206,76 @@ test("workflow follows review loops and verifies exact approved documents", () =
   }
 });
 
+test("replaced cancelled or declined assignments follow their replacement", () => {
+  for (const terminalState of ["cancelled", "declined"]) {
+    const events: HistoryEvent[] = [
+      {
+        sequence: 1,
+        kind: "assignment_created",
+        stage: "draft",
+        attempt: 1,
+        data: { assignment_id: "original" },
+      },
+      {
+        sequence: 2,
+        kind: "assignment_updated",
+        data: { assignment_id: "original", state: terminalState },
+      },
+    ];
+    assert.equal(position(workflow, events).state, "blocked");
+    events.push({
+      sequence: 3,
+      kind: "assignment_created",
+      stage: "draft",
+      attempt: 2,
+      data: { assignment_id: "replacement" },
+    });
+    assert.deepEqual(
+      {
+        state: position(workflow, events).state,
+        assignment: position(workflow, events).assignment_id,
+        attempt: position(workflow, events).attempt,
+      },
+      { state: "active", assignment: "replacement", attempt: 2 },
+    );
+    events.push({
+      sequence: 4,
+      kind: "assignment_submitted",
+      data: { assignment_id: "replacement", result: { outcome: "completed" } },
+    });
+    assert.deepEqual(
+      { state: position(workflow, events).state, step: position(workflow, events).step?.id },
+      { state: "ready", step: "review" },
+    );
+  }
+});
+
+test("recovery creation recorded before cancellation still follows the replacement", () => {
+  const events: HistoryEvent[] = [
+    {
+      sequence: 1,
+      kind: "assignment_created",
+      stage: "draft",
+      attempt: 1,
+      data: { assignment_id: "original" },
+    },
+    {
+      sequence: 2,
+      kind: "assignment_created",
+      stage: "draft",
+      attempt: 2,
+      data: { assignment_id: "replacement" },
+    },
+    {
+      sequence: 3,
+      kind: "assignment_updated",
+      data: { assignment_id: "original", state: "cancelled" },
+    },
+  ];
+  assert.equal(position(workflow, events).assignment_id, "replacement");
+  assert.equal(position(workflow, events).state, "active");
+});
+
 test("reapproval after implementation requires a new build attempt", () => {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "factory-reapproval-"),

@@ -301,6 +301,18 @@ export function position(
             event.data?.assignment_id === assignmentID,
         );
         const state = updates.at(-1)?.data?.state;
+        if (["cancelled", "declined"].includes(state)) {
+          const replacement = ordered.find(
+            (event) =>
+              event.sequence > created.sequence &&
+              event.kind === "assignment_created" &&
+              event.stage === step.id,
+          );
+          if (replacement) {
+            cursor = created.sequence;
+            continue;
+          }
+        }
         if (["blocked", "needs_input", "declined", "cancelled"].includes(state))
           return {
             state: "blocked",

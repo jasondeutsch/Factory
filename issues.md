@@ -197,3 +197,9 @@ The coordinator entrypoint validates configuration, starts local Compose or conn
 **Status:** Implemented
 
 `factory.json` owns team membership, workflow rules, and optional model/provider overrides. Each bundled agent owns its native Pi profile, skills, MCPs, and extensions; Factory owns the built-in coordinator bundle. `session.ts` resolves the selected configuration and generates private Pi files before launch. Factory selection is explicit, with no mutable home-directory coordinator profile. Tests cover isolation, inheritance, generated settings, unused resources, credential boundaries, and native Pi startup without model inference.
+
+## FACT-016 — Follow recovered assignment lineages
+
+**Status:** Implemented
+
+The workflow resolver follows a later assignment for the same stage when an earlier assignment was cancelled or declined. Without a replacement, the terminal assignment still blocks the step. Regression coverage includes the recovery service's event order, which publishes the replacement before the cancellation update.
