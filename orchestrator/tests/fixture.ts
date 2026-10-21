@@ -31,14 +31,14 @@ export async function fixture(contentRoot?: string) {
       );
   } else seedConfigurations(toolkit);
   fs.symlinkSync(
-    path.join(ROOT, "node_modules"),
-    path.join(toolkit, "node_modules"),
+    path.join(ROOT, "orchestrator/node_modules"),
+    path.join(toolkit, "orchestrator/node_modules"),
     "dir",
   );
   const binary = process.env.FACTORY_TEST_COMMS || path.join(root, "comms");
   if (!process.env.FACTORY_TEST_COMMS)
     await execute("go", ["build", "-o", binary, "./cmd/comms"], {
-      cwd: path.join(ROOT, "orchestrator/comms"),
+      cwd: path.join(ROOT, "comms"),
     });
   const reservation = net.createServer();
   reservation.listen(0, "127.0.0.1");

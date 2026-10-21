@@ -62,7 +62,7 @@ export async function main(args = process.argv.slice(2)) {
       [
         ...compose,
         "-f",
-        path.join(ROOT, "orchestrator/comms/compose.yaml"),
+        path.join(ROOT, "comms/compose.yaml"),
         "up",
         "--build",
         "-d",

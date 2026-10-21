@@ -12,7 +12,7 @@ Ask your coordinating agent:
 
 The coordinator must itself run inside Herdr (`HERDR_ENV=1`). This is a host process, not another Compose service: it needs the local Herdr CLI/socket and Go 1.26 or a locally built `cmd/bridge` binary. Comms must already be running with the updated service image. Restart/rebuild that image after updating the source; do not discard a volume containing needed history.
 
-After a session starts, name and inspect the actual agent using the [Herdr adapter](../adapters/herdr/README.md). Capture its reference from inside Herdr:
+After a session starts, name and inspect the actual agent using the [Herdr adapter](../orchestrator/adapters/herdr/README.md). Capture its reference from inside Herdr:
 
 ```bash
 $FACTORY_HOME/orchestrator/start-delivery.sh --bind account-architect
@@ -76,7 +76,7 @@ For a live smoke test **inside Herdr**, use dedicated coordinator and worker ses
 
 ## One-shot handoffs
 
-Task-bound launchers register their real instances automatically without a stored host binding. Use the [one-shot Herdr notification](../adapters/herdr/README.md#one-shot-inbox-notification) for these sessions when no bound background integration exists. It captures the current binding for that notification and records delivery without retiring or re-registering a participant. This avoids replacing an already assigned instance just to send a hint. It does not establish continuous polling; each sender must invoke it after saving a handoff. Attach a binding with `bind_participant` and start the polling bridge when continuous delivery is wanted.
+Task-bound launchers register their real instances automatically without a stored host binding. Use the [one-shot Herdr notification](../orchestrator/adapters/herdr/README.md#one-shot-inbox-notification) for these sessions when no bound background integration exists. It captures the current binding for that notification and records delivery without retiring or re-registering a participant. This avoids replacing an already assigned instance just to send a hint. It does not establish continuous polling; each sender must invoke it after saving a handoff. Attach a binding with `bind_participant` and start the polling bridge when continuous delivery is wanted.
 
 A null `claim_delivery.delivery` includes the exact `state` and optional `detail` explaining why no claim was issued. One-shot checks use that response, not the report’s latest-200 delivery window. Rebuild the comms service when updating the bridge and server together.
 

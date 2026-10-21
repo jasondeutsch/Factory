@@ -8,7 +8,7 @@ Keep SQLite, MCP, thin `start.sh` entrypoints, native runner configuration, and 
 
 **Status:** Implemented · **Priority:** First
 
-Implemented in the comms service with structured MCP operations, transactional notifications/events, version/idempotency checks, explicit instance replacement, schema-1 upgrade, reports, and updated skills. See [coordination reference](orchestrator/comms/coordination.md). Delivery and live presence remain FACT-002/FACT-003.
+Implemented in the comms service with structured MCP operations, transactional notifications/events, version/idempotency checks, explicit instance replacement, schema-1 upgrade, reports, and updated skills. See [coordination reference](comms/coordination.md). Delivery and live presence remain FACT-002/FACT-003.
 
 ### Problem
 
@@ -35,13 +35,13 @@ Comms stores tasks, messages, and events, but assignment identity, acceptance, o
 - Ownership/version conflicts and cross-task references have explicit errors and tests.
 - No workflow ordering, automatic assignment selection, heartbeat monitor, or delivery daemon is introduced in this issue.
 
-**Starting points:** [schema](orchestrator/comms/internal/comms/schema.sql), [MCP tools](orchestrator/comms/internal/comms/server.go), [message conventions](orchestrator/comms/skills/task-comms/references/messages.md).
+**Starting points:** [schema](comms/internal/comms/schema.sql), [MCP tools](comms/internal/comms/server.go), [message conventions](comms/skills/task-comms/references/messages.md).
 
 ## FACT-002 — External inbox delivery bridge with a Herdr adapter
 
 **Status:** Implemented; live Herdr smoke test pending · **Priority:** Second · **Depends on:** FACT-001
 
-Implemented an external Go host bridge using the official MCP client, captured Herdr bindings, durable exclusive notification claims, bounded retries/reconnects, explicit uncertain-input recovery, owner failure findings, delivery MCP queries, and report visibility. Manual mode remains available. See [delivery setup and verification](orchestrator/comms/delivery.md). Automated HTTP/Herdr-fixture tests cover both directions; real idle-pane wake-up must still be verified inside Herdr. Process/contact identity beyond the captured binding remains FACT-003.
+Implemented an external Go host bridge using the official MCP client, captured Herdr bindings, durable exclusive notification claims, bounded retries/reconnects, explicit uncertain-input recovery, owner failure findings, delivery MCP queries, and report visibility. Manual mode remains available. See [delivery setup and verification](comms/delivery.md). Automated HTTP/Herdr-fixture tests cover both directions; real idle-pane wake-up must still be verified inside Herdr. Process/contact identity beyond the captured binding remains FACT-003.
 
 ### Problem
 

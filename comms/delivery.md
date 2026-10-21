@@ -14,7 +14,7 @@ Listing an inbox or displaying a notification does not advance these states. `ex
 
 ## Pi adapter
 
-The launcher always includes [delivery.ts](../extensions/delivery.ts) in the private Pi profile. `--check` verifies its `factory-inbox` command is registered. Run `npm ci --omit=dev` in the toolkit before launching, and rebuild the comms service after updating its source.
+The launcher always includes [delivery.ts](../orchestrator/extensions/delivery.ts) in the private Pi profile. `--check` verifies its `factory-inbox` command is registered. Run `npm ci --omit=dev` in `factory/orchestrator` before launching, and rebuild the comms service after updating its source.
 
 A task-bound launch registers its real process and session snapshot. The extension binds that task automatically. For a coordinator started without a task, create/attach the task first, then call `factory_bind_task`. The task must belong to the configured project/factory. Each process binds one task; use a separate process for another task.
 
@@ -30,7 +30,7 @@ Set `FACTORY_TERMINAL_HOST=herdr`, `terminal`, or `iterm`; alternatively set `te
 
 Herdr opens a split; Terminal/iTerm open a macOS `.command` document in a visible window. Those two adapters currently support macOS only. Command files contain argv and project paths, not copied credentials. Ensure provider credentials, custom comms URL/token, proxy and CA settings are available in the new terminal's shell environment. Exporting them only in the coordinator process does not configure an already running terminal application. Manual startup remains available on other hosts.
 
-A closed window is not an assignment result. See [dispatch](../references/dispatch.md) for recovery without duplicate launches.
+A closed window is not an assignment result. See [dispatch](../orchestrator/references/dispatch.md) for recovery without duplicate launches.
 
 ## Implementing another runner
 

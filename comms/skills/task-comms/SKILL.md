@@ -19,7 +19,7 @@ The orchestrator explicitly chooses participants, supplies scope and relevant pe
 
 An existing agent can coordinate if it has this skill and working MCP tools. For new work, use `create_task` with an explicit project, brief, name, owner, and stable request key. Resolve resume requests with project-scoped `list_tasks`; ask when ambiguous. Retain the returned task ID and inspect current status, decisions, relevant messages, and artifacts before dispatching work.
 
-Read the task owner from the selected `factory.json`. The project identifier is the selected application root. For local document scaffolding, use the artifact helper in [coordinator operations](../../../references/operations.md); it attaches the service task instead of creating another one. `task.json` links documents to comms, not a second state store. Application code belongs in the project workspace.
+Read the task owner from the selected `factory.json`. The project identifier is the selected application root. For local document scaffolding, use the artifact helper in [coordinator operations](../../../orchestrator/references/operations.md); it attaches the service task instead of creating another one. `task.json` links documents to comms, not a second state store. Application code belongs in the project workspace.
 
 If comms is unavailable, report the failure and pause dependent coordination. Never create a competing file mailbox or claim an unsuccessful remote write was saved.
 
@@ -81,4 +81,4 @@ Use `get_task_report` for summaries and its report path relative to the service 
 
 Use `get_coordination_metrics` to distinguish recorded waiting/blocked time from model work. Record consequential human intervention with `record_event`, kind `note`, and `data.event_type: human_intervention`, describing the actual intervention once. Decisions are separate records; do not count inferred or automatic actions as human interventions.
 
-Pi sessions can import recorded assistant usage with the [runtime usage importer](../../../adapters/pi/import_usage.ts). Supply the explicit task, participant, assignment and private session path. It supports only a session with one assignment, rejects ambiguous attribution, and is safe to repeat. Wait for a complete JSONL record; never invent missing usage. Compaction/tool usage and cost remain outside this importer's coverage. Other runners can submit normalized measured `record_usage` directly.
+Pi sessions can import recorded assistant usage with the [runtime usage importer](../../../orchestrator/adapters/pi/import_usage.ts). Supply the explicit task, participant, assignment and private session path. It supports only a session with one assignment, rejects ambiguous attribution, and is safe to repeat. Wait for a complete JSONL record; never invent missing usage. Compaction/tool usage and cost remain outside this importer's coverage. Other runners can submit normalized measured `record_usage` directly.

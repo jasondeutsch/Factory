@@ -16,11 +16,8 @@ const roots = new Set([
   "README.md",
   "Makefile",
   ".gitignore",
-  "package.json",
-  "package-lock.json",
-  "tsconfig.json",
 ]);
-const managed = new Set(["orchestrator", "docs"]);
+const managed = new Set(["orchestrator", "comms", "docs"]);
 const excluded = new Set([
   ".git",
   "node_modules",

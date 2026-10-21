@@ -49,7 +49,7 @@ The assignment guard blocks Pi tool calls that could perform work after the boun
 
 Contact is a short-lived observation, not evidence that the agent is making progress. `read` and `exec` are agent declarations, not proof of comprehension or correct work. Acknowledgement can succeed even if its response is lost, so after an uncertain tool call inspect the inbox state before trying again.
 
-This code depends on Pi's extension API and is not part of the agent-neutral coordination contract. Another runner should implement the same registration, session snapshot, contact, inbox notification, read, and exec behavior using its native APIs. See [the runner delivery contract](../comms/delivery.md#implementing-another-runner).
+This code depends on Pi's extension API and is not part of the agent-neutral coordination contract. Another runner should implement the same registration, session snapshot, contact, inbox notification, read, and exec behavior using its native APIs. See [the runner delivery contract](../../comms/delivery.md#implementing-another-runner).
 
 ## Verification
 

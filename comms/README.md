@@ -1,12 +1,12 @@
-# Orchestrator MCP server
+# Comms MCP server
 
-The orchestrator's Go MCP server (`comms`) provides shared task records, participants, assignments, agent inboxes, structured evidence, and reports. It uses the official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) and the pure-Go [modernc SQLite driver](https://pkg.go.dev/modernc.org/sqlite). Its Go module lives in this directory.
+Factory's Go MCP server (`comms`) provides shared task records, participants, assignments, agent inboxes, structured evidence, and reports. It serves coordinators and workers; workflow decisions and agent launches remain with the orchestrator. It uses the official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) and the pure-Go [modernc SQLite driver](https://pkg.go.dev/modernc.org/sqlite). Its Go module lives in this directory.
 
 SQLite is embedded in the comms process. One Compose file starts **two containers**: the MCP server and a read-only SQLite Web admin panel. Both use the same named data volume. No separate database service is needed. Agents connect over Streamable HTTP; they do not open the database file.
 
 ## Start with Docker Compose
 
-From `factory/orchestrator/comms`, or `$FACTORY_HOME/orchestrator/comms` in an installed project:
+From `factory/comms`, or `$FACTORY_HOME/comms` in an installed project:
 
 ```bash
 docker-compose up --build -d
@@ -127,9 +127,9 @@ The orchestrator creates and retains the task ID, reuses the actual launcher reg
 
 Artifacts remain client-managed files. A decision event can include `data.outcome`, `data.artifacts` with paths and hashes, and a rationale in `message`. Check evidence can include commands, exit status, output references, tool versions, and MCP names. These values are submitted claims; the server does not inspect host files, run checks, validate artifact hashes, or grant approval. Secrets should never be included in event/message bodies; no automatic redaction is performed.
 
-**Factory integration:** team factory members should reference [skills/task-comms](skills/task-comms/SKILL.md) from their configuration; the launcher loads the selected skill and native connection. The TypeScript helpers use the same MCP tools through the [official SDK wrapper](../lib/client.ts). They do not open SQLite or maintain separate task state. Native agent clients remain the preferred interface.
+**Factory integration:** team factory members should reference [skills/task-comms](skills/task-comms/SKILL.md) from their configuration; the launcher loads the selected skill and native connection. The TypeScript helpers use the same MCP tools through the [official SDK wrapper](../orchestrator/lib/client.ts). They do not open SQLite or maintain separate task state. Native agent clients remain the preferred interface.
 
-The local `task.json` links a document directory to a service task ID and explicit project. Use `create_task` then the artifact helper's `attach` operation when working through native MCP. The launch approval guard reads comms decision events and checks current local HTML hashes. Old file-only task records are not silently imported. See [coordinator operations](../references/operations.md).
+The local `task.json` links a document directory to a service task ID and explicit project. Use `create_task` then the artifact helper's `attach` operation when working through native MCP. The launch approval guard reads comms decision events and checks current local HTML hashes. Old file-only task records are not silently imported. See [coordinator operations](../orchestrator/references/operations.md).
 
 The launcher defaults to the supplied endpoint; `FACTORY_COMMS_URL` selects another endpoint for both helpers and prepared profiles. `COMMS_AUTH_TOKEN` is shared through an environment reference. Keep these values consistent across sessions; role-specific environment remapping cannot override task identity or service settings. Other runners and already-open sessions need their own native connection/reload. No service or agent is started merely by reading a skill.
 
@@ -170,7 +170,7 @@ go run ./cmd/comms -db ./local-state.db
 
 Tests use temporary databases and the real MCP Go client over localhost HTTP. They cover concurrent writes, retry keys, project/task boundaries, acknowledgement semantics, status-version conflicts, database reopening, usage coverage, escaped HTML, and optional bearer access. Container validation additionally checks non-root writes, health, and shared-volume persistence, explicit reset, and live read-only admin access. They do not test model behavior or automatically capture usage.
 
-For the surrounding agent setup, see the [Factory README](../../README.md).
+For the surrounding agent setup, see the [Factory README](../README.md).
 
 ## Optional host delivery
 
@@ -225,7 +225,7 @@ With Comms running, launch from the application repository:
 "$FACTORY_HOME/orchestrator/monitor.sh"
 ```
 
-The launcher uses Go and the vendored dependencies; it does not install packages or start agents. Alternatively, run `make monitor PROJECT=/path/to/project` from the Factory checkout. For a standalone executable, build from `orchestrator/comms`:
+The launcher uses Go and the vendored dependencies; it does not install packages or start agents. Alternatively, run `make monitor PROJECT=/path/to/project` from the Factory checkout. For a standalone executable, build from `comms`:
 
 ```sh
 go build -mod=vendor -o /tmp/factory-monitor ./cmd/monitor

@@ -138,7 +138,7 @@ function agentBundle(directory: string, role: string) {
         ...(role === "coordinator"
           ? [path.join(ROOT, "orchestrator/SKILL.md")]
           : []),
-        path.join(ROOT, "orchestrator/comms/skills/task-comms/SKILL.md"),
+        path.join(ROOT, "comms/skills/task-comms/SKILL.md"),
         ...skills,
       ],
       mcps,

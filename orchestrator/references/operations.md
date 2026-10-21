@@ -1,10 +1,10 @@
 # Coordinator operations
 
-Users request work, ask for progress, and make decisions in conversation. Agents handle bookkeeping. Read the shared [task-comms skill](../comms/skills/task-comms/SKILL.md) for communication and evidence conventions. Use native `comms` MCP tools for task operations; helpers below handle local artifacts, launch configuration, and exact document hashes.
+Users request work, ask for progress, and make decisions in conversation. Agents handle bookkeeping. Read the shared [task-comms skill](../../comms/skills/task-comms/SKILL.md) for communication and evidence conventions. Use native `comms` MCP tools for task operations; helpers below handle local artifacts, launch configuration, and exact document hashes.
 
 ## Connect and establish a task
 
-The supplied coordinator entrypoint starts local Compose; each Pi session handles its own inbox delivery. For an externally hosted coordinator, run Compose separately as described in [comms setup](../comms/README.md). All participants must use the same service and explicit project identifier. In this toolbox, the project identifier is the resolved application root; do not search parent directories or infer another project. The default endpoint is `http://127.0.0.1:8090/mcp`. `FACTORY_COMMS_URL` selects another endpoint for helpers and prepared Pi profiles. If the service uses `COMMS_AUTH_TOKEN`, make the same variable available to helpers and native clients without printing it.
+The supplied coordinator entrypoint starts local Compose; each Pi session handles its own inbox delivery. For an externally hosted coordinator, run Compose separately as described in [comms setup](../../comms/README.md). All participants must use the same service and explicit project identifier. In this toolbox, the project identifier is the resolved application root; do not search parent directories or infer another project. The default endpoint is `http://127.0.0.1:8090/mcp`. `FACTORY_COMMS_URL` selects another endpoint for helpers and prepared Pi profiles. If the service uses `COMMS_AUTH_TOKEN`, make the same variable available to helpers and native clients without printing it.
 
 An existing coordinator or writer needs its runner's native MCP connection configured and reloaded; reading a skill does not register tools. No second coordinator process is needed. To start one intentionally, use `$FACTORY_HOME/orchestrator/start.sh --factory <configuration-file>` without a task; it loads its configuration and skills before taking your request. Do not launch workers until the service and selected model/provider are usable.
 
@@ -42,7 +42,7 @@ Read `cwd`, instructions, and `runner_configuration`. Configure per-member provi
 
 Use [dispatch](dispatch.md) to open or reuse a visible managed session and assign work. Dispatch invokes `session.ts`; do not start a second process afterward. For manual launch, run `node "$FACTORY_HOME/orchestrator/session.ts" <member> <artifact-directory>` in an available visible pane. Factory prepares the profile and calls the configured independent entrypoint. Do not run an interactive launcher in the coordinator's blocking shell or replace an occupied agent. Record actual live names and pane IDs with `record_event` so peers can notify one another. Do not guess IDs.
 
-The launcher supplies project, role, artifact directory, and comms task ID in its instructions/environment. Each member should select the skill directly from `orchestrator/comms/skills/task-comms`; Pi gets the matching MCP endpoint and optional token reference. Native profiles and transcripts live under `~/.factory/<project-name>-<path-hash>/runtime/`. Authored profiles and global Pi settings are not rewritten. Non-Pi command adapters must configure their runner's MCP connection separately. See [session configuration](../README.md).
+The launcher supplies project, role, artifact directory, and comms task ID in its instructions/environment. Each member should select the skill directly from `comms/skills/task-comms`; Pi gets the matching MCP endpoint and optional token reference. Native profiles and transcripts live under `~/.factory/<project-name>-<path-hash>/runtime/`. Authored profiles and global Pi settings are not rewritten. Non-Pi command adapters must configure their runner's MCP connection separately. See [session configuration](../README.md).
 
 For a configured loop launch, use the already registered member session, create its assignment with stage and positive attempt number, and start its native extension loop in the same pane. Alternatively launch with `--loop 5`, discover its new registration, and create its assignment during the launcher's bounded wait. The entry guard reads comms decision events and hashes the configured HTML artifacts. Follow the [loop configuration](../../docs/configuration.md) for bounded progress, independent review, and recovery.
 
@@ -52,7 +52,7 @@ In Pi, call `factory_bind_task` after task attachment; it registers the actual i
 
 Use `create_assignment` with registered participant IDs, the current workflow step's instructions, inputs, expected output, stage, attempt, and a stable request key. Retain its canonical ID. The service atomically creates its inbox notification and event. Workers acknowledge reading separately, accept/decline through `update_assignment`, report progress/blockers with versions, and hand off through `submit_result`. Reviewer results can use `changes_requested` to follow a configured revision route. These writes notify the other participant atomically; do not manually duplicate them as ordinary messages or lifecycle events.
 
-Use `get_assignment` and paginated `list_assignments` filters to inspect actual outstanding work. Stale versions require reconciliation, not blind overwrites. The orchestrator explicitly chooses follow-up review or repair assignments; submission never approves itself or completes the task. See [the coordination reference](../comms/coordination.md) for argument examples, allowed transitions, retries, and replacement.
+Use `get_assignment` and paginated `list_assignments` filters to inspect actual outstanding work. Stale versions require reconciliation, not blind overwrites. The orchestrator explicitly chooses follow-up review or repair assignments; submission never approves itself or completes the task. See [the coordination reference](../../comms/coordination.md) for argument examples, allowed transitions, retries, and replacement.
 
 Use `send_message` with optional `assignment_id` for questions, findings, peer exchanges, and direct human feedback. Read/acknowledge inbox messages using routing identity. Pi's native extension delivers hints automatically. Use `factory_read_message` to retrieve content and record `read`, then `factory_exec_message` immediately before acting. Other runners use the same MCP tools through their adapter. Do not add a competing terminal notification loop.
 
@@ -73,7 +73,7 @@ Use the actual decision, deciding identity, and rationale. This is an agent oper
 
 ## Maintainer verification
 
-From the toolkit root, run `npm ci`, `npm run check`, and `npm test`; run `go test -race ./...` in `orchestrator/comms`. See [verification](../tests/README.md) for isolation, optional native checks, and live acceptance limits.
+Run `npm ci`, `npm run check`, and `npm test` in `factory/orchestrator`; run `go test -race ./...` in `factory/comms`. See [verification](../tests/README.md) for isolation, optional native checks, and live acceptance limits.
 
 
 For coordinated handoffs, use [deterministic dispatch](dispatch.md) instead of separately opening a pane, guessing a participant, creating an assignment, and prompting it. The orchestrator owns the requested work; the helper owns recovery of that one operation.

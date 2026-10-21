@@ -3,20 +3,20 @@
 install:
 	brew install herdr git go node
 	curl -fsSL https://pi.dev/install.sh | sh
-	npm ci --omit=dev
-	cd orchestrator/comms && go mod download
+	cd orchestrator && npm ci --omit=dev
+	cd comms && go mod download
 
 update:
 	brew upgrade herdr git go node
 	pi update self
-	npm ci --omit=dev
-	cd orchestrator/comms && go mod download
+	cd orchestrator && npm ci --omit=dev
+	cd comms && go mod download
 
 verify:
-	npm ci
-	npm run check
-	npm test
-	cd orchestrator/comms && go test ./...
+	cd orchestrator && npm ci
+	cd orchestrator && npm run check
+	cd orchestrator && npm test
+	cd comms && go test ./...
 
 start:
 	./orchestrator/start.sh $(if $(PROJECT),--project "$(PROJECT)") $(if $(FACTORY),--factory "$(FACTORY)")

@@ -7,14 +7,14 @@ Users can ask their coordinator to configure or repair the setup. The diagnostic
 | Requirement | When needed | Supplied by Factory? |
 | --- | --- | --- |
 | Docker Compose and a reachable comms service | Shared task records and the supplied MCP connections. | Compose deployment is supplied; SQLite is embedded in its container. |
-| Node.js 22.18+ | Task and session helpers. | Install Node and run `npm ci --omit=dev` in the toolkit for its SDK/runtime dependencies. |
+| Node.js 22.18+ | Task and session helpers. | Install Node and run `npm ci --omit=dev` in `factory/orchestrator` for its SDK/runtime dependencies. |
 | Pi with the native configuration, auth, MCP, and extension commands used here | New sessions using the provided Pi adapter. | No; an installed runner is required. Another CLI needs an explicit command adapter. |
 | Selected provider, actual model ID, and credentials | Each new model session. | Agent bundles supply native Pi defaults. Set provider credentials in the environment; a factory may override a member provider/model. |
 | Go 1.26 | Build/run the terminal monitor or optional host delivery bridge; also needed for development. | No. A prebuilt executable avoids the runtime toolchain; source launchers use vendored dependencies. |
 | Herdr or macOS Terminal/iTerm | Automated visible agent sessions. | Select with `FACTORY_TERMINAL_HOST`; manual startup remains possible elsewhere. |
 | Dependencies selected by your factory | Language tools, MCP servers and third-party extensions. | Supplied/configured by your tools repository, not the framework. |
 
-Agent work runs on the host in ordinary sessions; no agent image or container sandbox is supplied. The [comms service](../orchestrator/comms/README.md) runs through Docker Compose and is required by the supplied task flow. It starts comms and the read-only admin panel together, with a shared named SQLite volume that survives container replacement. No database lives under the host home directory.
+Agent work runs on the host in ordinary sessions; no agent image or container sandbox is supplied. The [comms service](../comms/README.md) runs through Docker Compose and is required by the supplied task flow. It starts comms and the read-only admin panel together, with a shared named SQLite volume that survives container replacement. No database lives under the host home directory.
 
 ## Dependency commands
 
@@ -30,7 +30,7 @@ For example:
 
 > Configure the architect and Go agents for our OpenAI-compatible gateway at `<base URL>`, using `<model ID>` and `TEAM_MODEL_API_KEY`. Keep Linear disabled. Check setup without starting model work, then start a Go task from my request and bring me the spec and plan for approval.
 
-Start the service from `$FACTORY_HOME/orchestrator/comms` with `docker compose up --build -d` (or `docker-compose up --build -d` where that is the installed command). Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
+Start the service from `$FACTORY_HOME/comms` with `docker compose up --build -d` (or `docker-compose up --build -d` where that is the installed command). Connect the existing coordinator through its runner's native MCP configuration and reload it; prepared Pi worker profiles already include comms. Set `FACTORY_COMMS_URL` for a changed port/endpoint and pass the same optional `COMMS_AUTH_TOKEN` to service and clients.
 
 For managed workers, use dispatch or `node "$FACTORY_HOME/orchestrator/session.ts" <member> <task-directory>` in a visible terminal. Factory resolves configuration and skills, then invokes the declared entrypoint if present. Running a bundle’s `start.sh` directly is standalone operation and does not apply `factory.json`. No task argument starts an unassigned interactive role. The agent can inspect configuration with a launch dry run and test native readiness with `--check`. Checks do not call the model, though MCP checks start processes or contact configured services and loop checks can download the declared plugin. A successful credential check confirms local resolution; the first real model request can still fail remotely.
 
@@ -68,12 +68,12 @@ When changing a role's skill list, retain the desired existing entries: member s
 
 ## Maintainer checks
 
-Run `npm ci`, `npm run check`, and `npm test` at the toolkit root, then `go test -race ./...` in `orchestrator/comms`. See [verification](../orchestrator/tests/README.md) for native checks and their limits.
+Run `npm ci`, `npm run check`, and `npm test` in `orchestrator`, then `go test -race ./...` in `comms`. See [verification](../orchestrator/tests/README.md) for native checks and their limits.
 
 ## Automatic notifications are not arriving
 
 Inspect the Pi status line and `/factory-inbox`. Confirm the session was bound with `factory_bind_task`, or started with its explicit task directory. `get_session` must show native delivery with recent contact. An expired heartbeat can mean a stopped process, outage, or failed adapter; it is not proof of completion.
 
-The service image must include `execute_message` and `record_runner_contact`; rebuild Compose after source updates. Verify the selected profile loads the extension with `--check`. `npm ci --omit=dev` installs its local dependencies. Do not use terminal injection to conceal a disconnected extension. Retain message IDs; reconnect/retry does not require another assignment.
+The service image must include `execute_message` and `record_runner_contact`; rebuild Compose after source updates. Verify the selected profile loads the extension with `--check`. Run `npm ci --omit=dev` in `orchestrator` to install its local dependencies. Do not use terminal injection to conceal a disconnected extension. Retain message IDs; reconnect/retry does not require another assignment.
 
 Native Terminal/iTerm windows need credentials and service variables in their shell environment. Variables exported only in the coordinator shell are not automatically transferred to another terminal application. Keep secrets out of `.command` files and factory configuration.

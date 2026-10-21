@@ -8,7 +8,7 @@ For normal coordinator dispatch, use the [single dispatch operation](../../refer
 
 ## Manual panes
 
-The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in manual mode. The optional [host delivery bridge](../../comms/delivery.md) provides inbox notifications without a runner extension.
+The user can open role panes themselves if preferred. Each agent can load its role instructions and the relevant skills, recipe, and task context in an existing session. Use the [operations reference](../../references/operations.md) for new configured sessions. There is no automatic message watcher or completion push in manual mode. The optional [host delivery bridge](../../../comms/delivery.md) provides inbox notifications without a runner extension.
 
 ## Named sessions and notifications
 
@@ -30,7 +30,7 @@ Create canonical work with comms `create_assignment` using the registered partic
 
 Use the [one-shot notification operation](#one-shot-inbox-notification) below so delivery claims prevent duplicate input.
 
-Use only a known live name and safe argument quoting. Terminal input submission is not acknowledgement, acceptance, or completion. A notification failure leaves the assignment and message pending; inspect the agent and re-notify without duplicating work. Workers explicitly accept/decline and submit results through the [assignment tools](../../comms/coordination.md).
+Use only a known live name and safe argument quoting. Terminal input submission is not acknowledgement, acceptance, or completion. A notification failure leaves the assignment and message pending; inspect the agent and re-notify without duplicating work. Workers explicitly accept/decline and submit results through the [assignment tools](../../../comms/coordination.md).
 
 Use `herdr agent get <name>` and `herdr agent read <name> --source recent-unwrapped --lines 120` to inspect sessions. For explicit notification without creating another message, use the one-shot bridge below. Herdr may reject blocked dialogs; do not answer an approval prompt on the user's behalf without authority. Terminal output is a view, not a durable task result.
 
@@ -44,7 +44,7 @@ The core toolbox neither installs this extension nor assumes all runners support
 
 ## Automatic inbox delivery
 
-Use the [fallback bridge setup](../../comms/herdr-delivery.md) to capture each live named session as structured `session_ref` and attach it to its existing participant with `bind_participant`. Start this fallback separately only for runners without native delivery. The supplied Pi coordinator does not need or start it. Register and bind the coordinator too; process startup alone does not create a task binding. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
+Use the [fallback bridge setup](../../../comms/herdr-delivery.md) to capture each live named session as structured `session_ref` and attach it to its existing participant with `bind_participant`. Start this fallback separately only for runners without native delivery. The supplied Pi coordinator does not need or start it. Register and bind the coordinator too; process startup alone does not create a task binding. It submits inbox hints only when the bound session is idle/done, records attempts in comms, and leaves reading/acceptance/results to agents. When enabled, do not also manually prompt for each stored notification. Busy/blocked sessions are not interrupted. Report or inspect failures rather than silently duplicating assignments.
 
 ## One-shot inbox notification
 

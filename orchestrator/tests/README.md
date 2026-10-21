@@ -1,12 +1,13 @@
 # Coordination verification
 
-From the toolkit root, `make verify` installs the development dependencies (including TypeScript), checks the code, and runs the TypeScript and Go suites. The runtime `make install`/`npm ci --omit=dev` omits the compiler, so use the full install before running checks manually:
+From the Factory root, `make verify` installs the development dependencies (including TypeScript), checks the code, and runs the TypeScript and Go suites. The runtime `make install`/`npm ci --omit=dev` omits the compiler, so use the full install in `orchestrator` before running checks manually:
 
 ```sh
+cd orchestrator
 npm ci
 npm run check
 npm test
-(cd orchestrator/comms && go test -race ./...)
+(cd ../comms && go test -race ./...)
 ```
 
 TypeScript tests build comms with Go and start isolated localhost servers with disposable SQLite databases. They use temporary project copies and terminal fixtures, not the normal Compose service. `FACTORY_TEST_COMMS` may point to an already built comms binary. Set `FACTORY_TEST_PI` to an installed Pi executable to check real native credentials/MCP/extension loading using fixture credentials and no model request. Without it that test is explicitly skipped. Factory-specific checks, including extension behavior, belong to the tools repository.

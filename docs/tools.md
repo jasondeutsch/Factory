@@ -17,4 +17,4 @@ The coordinator reads the pinned workflow and communicates through comms. The re
 
 The framework's task helper scaffolds only the `artifacts` declared in a selected factory. Its optional loop launch uses member configuration and actual artifact approvals; the selected extension owns iteration behavior. Application checks, ticket tools, model choices, prompts and review methods belong to the tools repository.
 
-See [configuration](configuration.md), [startup](../orchestrator/README.md), and the [delivery contract](../orchestrator/comms/delivery.md) for the operational details. Tests verify protocol and launch boundaries; live model behavior and terminal integration need their own evaluation.
+See [configuration](configuration.md), [startup](../orchestrator/README.md), and the [delivery contract](../comms/delivery.md) for the operational details. Tests verify protocol and launch boundaries; live model behavior and terminal integration need their own evaluation.

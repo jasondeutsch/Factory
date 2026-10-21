@@ -35,14 +35,14 @@ An existing agent needs access to the application and external checkouts, shell/
 
    ```sh
    export FACTORY_HOME=/path/to/factory
-   docker compose -f "$FACTORY_HOME/orchestrator/comms/compose.yaml" up --build -d
+   docker compose -f "$FACTORY_HOME/comms/compose.yaml" up --build -d
    ```
 
    Use `docker-compose` if that is your installed Compose command. Set `FACTORY_COMMS_URL` in the helper environment when using a different endpoint.
 
-2. Add **Comms** to the existing agent's native MCP configuration with URL `http://127.0.0.1:8090/mcp`, then reconnect/reload its MCP tools. Configuration syntax depends on the runner. If `COMMS_AUTH_TOKEN` is enabled, configure the matching bearer header through that client's credential mechanism. See [MCP connection details](comms/README.md#connect-an-agent). Reading a skill does not establish this connection.
+2. Add **Comms** to the existing agent's native MCP configuration with URL `http://127.0.0.1:8090/mcp`, then reconnect/reload its MCP tools. Configuration syntax depends on the runner. If `COMMS_AUTH_TOKEN` is enabled, configure the matching bearer header through that client's credential mechanism. See [MCP connection details](../comms/README.md#connect-an-agent). Reading a skill does not establish this connection.
 
-3. Have the agent read the [coordinator skill](SKILL.md) and [task-comms skill](comms/skills/task-comms/SKILL.md). From the application root, have it resolve project configuration with:
+3. Have the agent read the [coordinator skill](SKILL.md) and [task-comms skill](../comms/skills/task-comms/SKILL.md). From the application root, have it resolve project configuration with:
 
    ```sh
    node "$FACTORY_HOME/orchestrator/session.ts" coordinator --dry-run
@@ -56,11 +56,11 @@ For example, tell your existing agent:
 
 > Act as the Factory coordinator for /path/to/application. The framework is at /path/to/factory, and Comms is connected. Load the coordinator and task-comms skills, resolve the project's factory.json using the coordinator dry run, and create a task for a minimal Hello World program in Go. Launch the configured workers as needed. Pause for my required approvals and report progress and blockers here.
 
-The prepared Pi coordinator includes automatic inbox delivery. An existing session receives that behavior only if it has the delivery adapter configured. Other runners need an adapter implementing the [delivery contract](comms/delivery.md), or the agent must explicitly check its inbox and coordinator attention items at turn boundaries and while supervising work. A skill cannot wake an idle or stopped agent. Do not claim automatic notifications where no adapter exists.
+The prepared Pi coordinator includes automatic inbox delivery. An existing session receives that behavior only if it has the delivery adapter configured. Other runners need an adapter implementing the [delivery contract](../comms/delivery.md), or the agent must explicitly check its inbox and coordinator attention items at turn boundaries and while supervising work. A skill cannot wake an idle or stopped agent. Do not claim automatic notifications where no adapter exists.
 
 ### Observe either mode
 
-Run `"$FACTORY_HOME/orchestrator/monitor.sh"` from the application root to see tasks, agents, attention items and message routes in the terminal. The source launcher requires Go 1.26+ and an already running Comms service; a prebuilt binary avoids the Go requirement. See [controls and connection settings](comms/README.md#terminal-monitor). The [browser monitor](http://127.0.0.1:8090/monitor) shows recorded status too. Port 8091 is the SQLite administration panel. You can also ask the coordinating agent for status. Both monitors read the same Comms records.
+Run `"$FACTORY_HOME/orchestrator/monitor.sh"` from the application root to see tasks, agents, attention items and message routes in the terminal. The source launcher requires Go 1.26+ and an already running Comms service; a prebuilt binary avoids the Go requirement. See [controls and connection settings](../comms/README.md#terminal-monitor). The [browser monitor](http://127.0.0.1:8090/monitor) shows recorded status too. Port 8091 is the SQLite administration panel. You can also ask the coordinating agent for status. Both monitors read the same Comms records.
 
 ## How configuration reaches Pi
 
@@ -154,7 +154,7 @@ Task-bound launches register the actual process instance and publish an immutabl
 
 The Compose named volume retains SQLite history across restarts; `down -v` deletes it. Private session files are not automatically removed. Moving the project changes its path-based identity. Resume requires explicit reconciliation of the task, inbox, assignments, and native session state; `start.sh` creates a fresh process rather than silently taking over old work.
 
-See [operations](references/operations.md), [dispatch and recovery](references/dispatch.md), and [database storage](comms/README.md#shared-database-volume).
+See [operations](references/operations.md), [dispatch and recovery](references/dispatch.md), and [database storage](../comms/README.md#shared-database-volume).
 
 ## Configured loop launches
 
@@ -164,7 +164,7 @@ Factories may configure a member's `loop` settings and required Pi extension com
 
 Set the member's `config.runner` to `command` and provide `command` as an argv list containing `{instructions_file}`. Other placeholders are `{project_root}`, `{task_dir}`, and `{session_dir}`. The launcher executes without a shell and supplies the same role/skill instructions and task identity.
 
-Pi model/tool settings inherited from factory defaults do not apply to command runners. Configure that runner's models and native MCP transport through its command and environment; Factory does not translate Pi configuration into another CLI's schema. A command runner has no automatic native readiness check or sandbox. For automatic inbox delivery, implement the [runner delivery contract](comms/delivery.md#implementing-another-runner). Otherwise use explicit manual inbox checks. Reading instructions does not register tools.
+Pi model/tool settings inherited from factory defaults do not apply to command runners. Configure that runner's models and native MCP transport through its command and environment; Factory does not translate Pi configuration into another CLI's schema. A command runner has no automatic native readiness check or sandbox. For automatic inbox delivery, implement the [runner delivery contract](../comms/delivery.md#implementing-another-runner). Otherwise use explicit manual inbox checks. Reading instructions does not register tools.
 
 ## Add a member
 

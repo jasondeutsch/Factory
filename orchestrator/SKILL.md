@@ -5,7 +5,7 @@ description: Coordinate a Factory task through visible interactive agent session
 
 # Factory coordinator
 
-Use this skill in the user's existing agent session; a separate coordinator process is not required. Read the resolved factory configuration and its selected `recipe`, when present, and the shared [task-comms skill](comms/skills/task-comms/SKILL.md). You are the user's main conversation and the task's status writer for coordinated flows. Use the [operations reference](references/operations.md) for deterministic bookkeeping and session commands. Perform those operations yourself using available tools rather than asking the user to run routine lifecycle scripts.
+Use this skill in the user's existing agent session; a separate coordinator process is not required. Read the resolved factory configuration and its selected `recipe`, when present, and the shared [task-comms skill](../comms/skills/task-comms/SKILL.md). You are the user's main conversation and the task's status writer for coordinated flows. Use the [operations reference](references/operations.md) for deterministic bookkeeping and session commands. Perform those operations yourself using available tools rather than asking the user to run routine lifecycle scripts.
 
 Resolve the relative links in these role instructions from the stated role source directory. The generated session header lists the toolkit root and actual factory configuration files. Use those paths instead of guessing locations. The framework and worker bundles can be outside the application. Use `FACTORY_HOME` for helper commands and the explicit runtime/task paths for artifacts; do not create a project `.factory` directory.
 
@@ -33,7 +33,7 @@ Load role instructions and configured skills into existing sessions explicitly. 
 
 ## Coordinate
 
-Before each handoff, run `workflow.ts status <task-directory>` and use `workflow.ts request <task-directory>` to obtain the exact request for a ready agent step. Prefer the [deterministic dispatch operation](references/dispatch.md) to start or explicitly reuse a visible member and create one assignment. Retain its retry key and inspect partial receipts; never duplicate its assignment manually. Assignment writes atomically create their inbox messages; Pi's native extension supplies background delivery. Do not inject a second prompt through Herdr. Read hints using `factory_read_message`; call `factory_exec_message` before acting, then use canonical assignment state for acceptance/progress/results. For other runners, establish their actual adapter or manual delivery mode. A skill cannot poll by itself. `get_session` contact is an expiring observation, not evidence of progress. The [delivery contract](comms/delivery.md) describes other runners and recovery.
+Before each handoff, run `workflow.ts status <task-directory>` and use `workflow.ts request <task-directory>` to obtain the exact request for a ready agent step. Prefer the [deterministic dispatch operation](references/dispatch.md) to start or explicitly reuse a visible member and create one assignment. Retain its retry key and inspect partial receipts; never duplicate its assignment manually. Assignment writes atomically create their inbox messages; Pi's native extension supplies background delivery. Do not inject a second prompt through Herdr. Read hints using `factory_read_message`; call `factory_exec_message` before acting, then use canonical assignment state for acceptance/progress/results. For other runners, establish their actual adapter or manual delivery mode. A skill cannot poll by itself. `get_session` contact is an expiring observation, not evidence of progress. The [delivery contract](../comms/delivery.md) describes other runners and recovery.
 
 Permit relevant peer questions. Ask agents to summarize consequential peer and human exchanges back to you. Keep source editing with one owner at a time. After direct human intervention, reconcile the task with the changed instructions before issuing conflicting work.
 
@@ -41,7 +41,7 @@ Maintain status through comms `get_task` and `update_task` with the current vers
 
 ## Interrupted work
 
-Use `get_recovery_plan` before recovering an assignment. Inspect evidence and actual process state; expired contact is not proof the process stopped. After confirming the previous process stopped and registering a real replacement, use owner-only `recover_assignment` with the current version and stable key. Inspect the linked assignment receipt and notify the replacement. Do not copy a participant ID into a new process, claim prior work was verified, or bypass approval decisions. See [recovery details](comms/coordination.md#recover-stopped-work).
+Use `get_recovery_plan` before recovering an assignment. Inspect evidence and actual process state; expired contact is not proof the process stopped. After confirming the previous process stopped and registering a real replacement, use owner-only `recover_assignment` with the current version and stable key. Inspect the linked assignment receipt and notify the replacement. Do not copy a participant ID into a new process, claim prior work was verified, or bypass approval decisions. See [recovery details](../comms/coordination.md#recover-stopped-work).
 
 ## Actionable inbox
 

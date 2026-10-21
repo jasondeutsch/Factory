@@ -24,7 +24,7 @@ export function seedConfigurations(toolkit: string) {
       path:
         role === "coordinator" ? "../../orchestrator" : `../../agents/${role}`,
       skills: [
-        "../../orchestrator/comms/skills/task-comms",
+        "../../comms/skills/task-comms",
         ...(role === "designer"
           ? ["../../agents/designer/skills/fixture-design"]
           : []),

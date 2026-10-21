@@ -2,7 +2,7 @@
 
 A lightweight framework for coordinating visible, interactive agent sessions. A factory defines its members and workflow steps; the coordinator delegates the current step, gathers results, and brings decisions back to the user. Comms records tasks, messages, approvals, evidence and usage.
 
-This repository contains the built-in coordinator agent, launchers, Pi delivery extension, and Comms MCP service. Team worker agents and factory recipes can live in a separate repository such as `tools`.
+This repository contains the built-in coordinator agent, launchers, and Pi delivery extension under `orchestrator/`. The sibling `comms/` directory contains the shared MCP service, task-comms skill, and monitor. Team worker agents and factory recipes can live in a separate repository such as `tools`.
 
 ## Setup
 
@@ -10,7 +10,7 @@ Keep the framework and tools checkouts outside the application repository. Insta
 
 ```sh
 cd /path/to/factory
-npm ci --omit=dev
+(cd orchestrator && npm ci --omit=dev)
 export FACTORY_HOME=/path/to/factory
 ```
 
@@ -78,7 +78,7 @@ All relative paths start at the file declaring them. These resources can remain 
 
 ## Use an existing agent instead
 
-Your current agent can serve as coordinator if it has shell/terminal access and a Comms MCP connection. Load the [coordinator skill](orchestrator/SKILL.md) and [task-comms skill](orchestrator/comms/skills/task-comms/SKILL.md), resolve the project configuration, and give it your task. This does not require a second coordinator process or a Pi coordinator.
+Your current agent can serve as coordinator if it has shell/terminal access and a Comms MCP connection. Load the [coordinator skill](orchestrator/SKILL.md) and [task-comms skill](comms/skills/task-comms/SKILL.md), resolve the project configuration, and give it your task. This does not require a second coordinator process or a Pi coordinator.
 
 See [both coordinator setup paths](orchestrator/README.md#two-ways-to-start-coordinating) for service startup, MCP connection, configuration loading and an example prompt. Automatic inbox delivery currently has a Pi adapter; other runners require their own adapter or explicit inbox checks. Another agent can also launch the supplied coordinator through terminal controls; Comms has no process-launch MCP tool.
 
@@ -88,7 +88,7 @@ Open the terminal monitor from your project directory (with Comms running):
 "$FACTORY_HOME/orchestrator/monitor.sh"
 ```
 
-Or run `make monitor PROJECT=/path/to/project` from the Factory checkout. The TUI shows task status, attention items, agents, message routes, and activity. Use arrows to select tasks, `1`/`2`/`3` for overview/comms/events, and `q` to quit. See [monitor controls and configuration](orchestrator/comms/README.md#terminal-monitor).
+Or run `make monitor PROJECT=/path/to/project` from the Factory checkout. The TUI shows task status, attention items, agents, message routes, and activity. Use arrows to select tasks, `1`/`2`/`3` for overview/comms/events, and `q` to quit. See [monitor controls and configuration](comms/README.md#terminal-monitor).
 
 The [browser monitor](http://127.0.0.1:8090/monitor) remains available.
 
@@ -107,6 +107,6 @@ Agents retain host permissions. Factory is not a sandbox or workflow scheduler. 
 - [Configuration](docs/configuration.md): composition, paths, membership and overrides.
 - [Agent startup](orchestrator/README.md): native profiles and readiness checks.
 - [Coordinator operations](orchestrator/references/operations.md) and [dispatch recovery](orchestrator/references/dispatch.md).
-- [Comms](orchestrator/comms/README.md) and [delivery contract](orchestrator/comms/delivery.md).
+- [Comms](comms/README.md) and [delivery contract](comms/delivery.md).
 - [Updates](docs/toolkit-updates.md), [troubleshooting](docs/troubleshooting.md), and [tradeoffs](docs/tools.md).
 - [Verification](orchestrator/tests/README.md).

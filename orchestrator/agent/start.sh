@@ -15,7 +15,7 @@ cp "$agent_dir"/pi/*.json "$profile/"
 export PI_CODING_AGENT_DIR="$profile"
 set -- --append-system-prompt "$agent_dir/agent.md" --no-skills \
   --skill "$agent_dir/.." \
-  --skill "$agent_dir/../comms/skills/task-comms" "$@"
+  --skill "$agent_dir/../../comms/skills/task-comms" "$@"
 for skill in "$agent_dir"/skills/*; do
   [ -f "$skill/SKILL.md" ] || continue
   skill_dir=$(CDPATH= cd -- "$skill" && pwd -P)
