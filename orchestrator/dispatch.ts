@@ -174,8 +174,7 @@ export async function main(argv = process.argv.slice(2)) {
             (entry) =>
               ["session_startup_failed", "session_runner_failed"].includes(
                 entry.data?.event_type,
-              ) &&
-              entry.data?.instance_id === receipt.instance_id,
+              ) && entry.data?.instance_id === receipt.instance_id,
           );
           return failure?.message as string | undefined;
         };
@@ -263,7 +262,8 @@ export async function main(argv = process.argv.slice(2)) {
               if (participant) break;
               if (++polls % 4 === 0) {
                 const failure = await startupFailure();
-                if (failure) throw new Error(`Worker startup failed: ${failure}`);
+                if (failure)
+                  throw new Error(`Worker startup failed: ${failure}`);
               }
               if (Date.now() > deadline)
                 throw new Error(
@@ -288,12 +288,14 @@ export async function main(argv = process.argv.slice(2)) {
               if (
                 snapshot.manifest?.delivery === "native" &&
                 (snapshot.contact_state === "idle" ||
-                  (receipt.assignment_id && snapshot.contact_state === "working"))
+                  (receipt.assignment_id &&
+                    snapshot.contact_state === "working"))
               )
                 break;
               if (++polls % 2 === 0) {
                 const failure = await startupFailure();
-                if (failure) throw new Error(`Worker startup failed: ${failure}`);
+                if (failure)
+                  throw new Error(`Worker startup failed: ${failure}`);
               }
               if (Date.now() > deadline)
                 throw new Error(

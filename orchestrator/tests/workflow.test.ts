@@ -111,7 +111,18 @@ test("workflow rejects invalid references and unreachable steps", () => {
     /needs \{iterations\}/,
   );
   assert.throws(
-    () => validateWorkflow({ ...workflow, steps: [{ ...workflow.steps[0], handoff: null }, ...workflow.steps.slice(1)] }, ["writer", "reviewer"], ["spec.html"]),
+    () =>
+      validateWorkflow(
+        {
+          ...workflow,
+          steps: [
+            { ...workflow.steps[0], handoff: null },
+            ...workflow.steps.slice(1),
+          ],
+        },
+        ["writer", "reviewer"],
+        ["spec.html"],
+      ),
     /Invalid handoff/,
   );
 });
@@ -244,7 +255,10 @@ test("replaced cancelled or declined assignments follow their replacement", () =
       data: { assignment_id: "replacement", result: { outcome: "completed" } },
     });
     assert.deepEqual(
-      { state: position(workflow, events).state, step: position(workflow, events).step?.id },
+      {
+        state: position(workflow, events).state,
+        step: position(workflow, events).step?.id,
+      },
       { state: "ready", step: "review" },
     );
   }

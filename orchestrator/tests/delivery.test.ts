@@ -168,16 +168,30 @@ test("assignment guard stays bound to one assignment across review feedback", as
   let taskStatus = "working";
   const assignments: RecordValue[] = [];
   const port = {
-    async call() { return { status: taskStatus }; },
-    async pages() { return assignments; },
+    async call() {
+      return { status: taskStatus };
+    },
+    async pages() {
+      return assignments;
+    },
   };
   assert.equal((await assignmentPermission(port, binding)).allowed, false);
   assignments.push({ id: "first", state: "working" });
   const started = await assignmentPermission(port, binding);
-  assert.deepEqual(started, { allowed: true, assignment_id: "first", reason: "" });
+  assert.deepEqual(started, {
+    allowed: true,
+    assignment_id: "first",
+    reason: "",
+  });
   assignments[0].state = "completed";
   assignments.push({ id: "review-repair", state: "offered" });
-  assert.equal((await assignmentPermission(port, binding, started.assignment_id)).allowed, false);
+  assert.equal(
+    (await assignmentPermission(port, binding, started.assignment_id)).allowed,
+    false,
+  );
   taskStatus = "cancelled";
-  assert.equal((await assignmentPermission(port, binding, started.assignment_id)).reason, "Task is terminal");
+  assert.equal(
+    (await assignmentPermission(port, binding, started.assignment_id)).reason,
+    "Task is terminal",
+  );
 });

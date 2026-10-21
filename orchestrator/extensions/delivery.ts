@@ -23,7 +23,11 @@ export async function assignmentPermission(
 ) {
   const task = await port.call("get_task", { task_id: binding.task_id });
   if (["complete", "cancelled"].includes(task.status))
-    return { allowed: false, assignment_id: assignmentID, reason: "Task is terminal" };
+    return {
+      allowed: false,
+      assignment_id: assignmentID,
+      reason: "Task is terminal",
+    };
   const assignments = await port.pages("list_assignments", "assignments", {
     task_id: binding.task_id,
     assignee_id: binding.participant_id,
@@ -279,19 +283,37 @@ export default function deliveryExtension(pi: ExtensionAPI) {
   });
   pi.on("tool_call", async (tool) => {
     if (process.env.FACTORY_ASSIGNMENT_GUARD !== "1") return;
-    if (["read", "grep", "find", "ls", "factory_read_message", "factory_bind_task"].includes(tool.toolName))
+    if (
+      [
+        "read",
+        "grep",
+        "find",
+        "ls",
+        "factory_read_message",
+        "factory_bind_task",
+      ].includes(tool.toolName)
+    )
       return;
     if (!binding)
-      return { block: true, reason: "Bind the task before acting", terminate: true };
+      return {
+        block: true,
+        reason: "Bind the task before acting",
+        terminate: true,
+      };
     try {
-      const permission = await assignmentPermission(client, binding, guardedAssignmentID);
+      const permission = await assignmentPermission(
+        client,
+        binding,
+        guardedAssignmentID,
+      );
       guardedAssignmentID = permission.assignment_id;
       if (!permission.allowed)
         return { block: true, reason: permission.reason, terminate: true };
     } catch {
       return {
         block: true,
-        reason: "Cannot verify the canonical assignment; stop and reconnect to Comms",
+        reason:
+          "Cannot verify the canonical assignment; stop and reconnect to Comms",
         terminate: true,
       };
     }

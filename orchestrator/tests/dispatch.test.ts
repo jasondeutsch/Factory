@@ -35,9 +35,11 @@ test("dispatch retries reconcile the actual instance without duplicate launches 
       failedInstance,
     ]),
   );
-  const startupEvent = (await f.client.pages("list_events", "events", {
-    task_id: metadata.comms_id,
-  })).find((item) => item.data?.instance_id === failedInstance);
+  const startupEvent = (
+    await f.client.pages("list_events", "events", {
+      task_id: metadata.comms_id,
+    })
+  ).find((item) => item.data?.instance_id === failedInstance);
   assert.equal(startupEvent?.kind, "failure");
   assert.equal(startupEvent?.data?.event_type, "session_startup_failed");
   assert.match(startupEvent?.message || "", /Worker startup failed/);
@@ -102,7 +104,8 @@ if(args[1]==='run'){
     }),
   );
   const dispatchRoot = path.join(f.env.FACTORY_RUNTIME_DIR, "dispatch");
-  const receiptDirectory = fs.readdirSync(dispatchRoot)
+  const receiptDirectory = fs
+    .readdirSync(dispatchRoot)
     .map((name) => path.join(dispatchRoot, name))
     .find((candidate) => fs.existsSync(path.join(candidate, "receipt.json")))!;
   await assert.rejects(
@@ -110,7 +113,11 @@ if(args[1]==='run'){
     /pane did not start/,
   );
   assert.equal(
-    (await f.client.pages("list_assignments", "assignments", { task_id: metadata.comms_id })).length,
+    (
+      await f.client.pages("list_assignments", "assignments", {
+        task_id: metadata.comms_id,
+      })
+    ).length,
     0,
   );
   fs.writeFileSync(path.join(receiptDirectory, "launch.started"), "started\n");
@@ -119,12 +126,18 @@ if(args[1]==='run'){
     /no fresh contact/,
   );
   assert.equal(
-    (await f.client.pages("list_assignments", "assignments", { task_id: metadata.comms_id })).length,
+    (
+      await f.client.pages("list_assignments", "assignments", {
+        task_id: metadata.comms_id,
+      })
+    ).length,
     0,
   );
-  const worker = (await f.client.pages("list_participants", "participants", {
-    task_id: metadata.comms_id,
-  })).find((participant) => participant.role === "designer")!;
+  const worker = (
+    await f.client.pages("list_participants", "participants", {
+      task_id: metadata.comms_id,
+    })
+  ).find((participant) => participant.role === "designer")!;
   await f.client.call("record_event", {
     task_id: metadata.comms_id,
     actor: "designer",

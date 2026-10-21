@@ -135,14 +135,33 @@ test("optional model probe exercises selected model and thinking level", async (
     files: {},
     auth: {},
     required: [],
-    summary: { provider: "corporate", model: "example", thinking: "high", enabled_mcps: [] },
+    summary: {
+      provider: "corporate",
+      model: "example",
+      thinking: "high",
+      enabled_mcps: [],
+    },
   };
   fs.mkdirSync(profile.target, { recursive: true });
   await check(profile, executable, f.env, f.project, 3000);
-  await assert.rejects(check(profile, executable, f.env, f.project, 3000, [], true), /model probe failed/);
-  const calls = fs.readFileSync(path.join(f.root, "probe-args"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  await assert.rejects(
+    check(profile, executable, f.env, f.project, 3000, [], true),
+    /model probe failed/,
+  );
+  const calls = fs
+    .readFileSync(path.join(f.root, "probe-args"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
   const probe = calls.find((args: string[]) => args.includes("--print"));
-  assert.deepEqual(probe.slice(0, 6), ["--provider", "corporate", "--model", "example", "--thinking", "high"]);
+  assert.deepEqual(probe.slice(0, 6), [
+    "--provider",
+    "corporate",
+    "--model",
+    "example",
+    "--thinking",
+    "high",
+  ]);
 });
 test("invalid configuration is rejected before launching a process", async () => {
   const file = path.join(f.toolkit, "factories/minimal/factory.json"),
@@ -802,7 +821,10 @@ test("circular configuration inheritance fails before runtime writes", async () 
 });
 
 test("no project config can launch the built-in coordinator preview", async () => {
-  const settingsPath = path.join(f.toolkit, "orchestrator/agent/pi/settings.json");
+  const settingsPath = path.join(
+    f.toolkit,
+    "orchestrator/agent/pi/settings.json",
+  );
   const modelsPath = path.join(f.toolkit, "orchestrator/agent/pi/models.json");
   const originalSettings = fs.readFileSync(settingsPath);
   const originalModels = fs.readFileSync(modelsPath);
@@ -821,7 +843,8 @@ test("no project config can launch the built-in coordinator preview", async () =
     };
     writeJSON(modelsPath, models);
     preview = JSON.parse(
-      (await f.cli("orchestrator/session.ts", ["coordinator", "--dry-run"])).stdout,
+      (await f.cli("orchestrator/session.ts", ["coordinator", "--dry-run"]))
+        .stdout,
     );
   } finally {
     fs.writeFileSync(settingsPath, originalSettings);

@@ -128,7 +128,11 @@ export function validateWorkflow(
       if (!step.outputs.length)
         throw new Error(`Agent step ${step.id} needs outputs`);
       if ("handoff" in step) {
-        if (!step.handoff || typeof step.handoff !== "object" || Array.isArray(step.handoff))
+        if (
+          !step.handoff ||
+          typeof step.handoff !== "object" ||
+          Array.isArray(step.handoff)
+        )
           throw new Error(`Invalid handoff for ${step.id}`);
         fields(
           step.handoff,
@@ -156,7 +160,11 @@ export function validateWorkflow(
             stringList(step.handoff[list], `${step.id}.handoff.${list}`);
       }
       if ("loop" in step) {
-        if (!step.loop || typeof step.loop !== "object" || Array.isArray(step.loop))
+        if (
+          !step.loop ||
+          typeof step.loop !== "object" ||
+          Array.isArray(step.loop)
+        )
           throw new Error(`Invalid loop for ${step.id}`);
         fields(
           step.loop,

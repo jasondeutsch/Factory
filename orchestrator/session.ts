@@ -82,7 +82,9 @@ export function startupFailureSummary(error: unknown): string {
     /^Loop requires approval of current [a-zA-Z0-9_.-]+/,
     /^Agent process exited with status [0-9]+/,
   ];
-  const match = known.map((pattern) => message.match(pattern)?.[0]).find(Boolean);
+  const match = known
+    .map((pattern) => message.match(pattern)?.[0])
+    .find(Boolean);
   return match || "Worker startup failed; inspect its private diagnostics";
 }
 export function prepare(
@@ -529,12 +531,18 @@ export async function main(argv = process.argv.slice(2)) {
     if (task) {
       const summary = startupFailureSummary(error);
       const reporter = new Comms();
-      await event(reporter, task.metadata, role, runnerStarted ? "session_runner_failed" : "session_startup_failed", {
-        participant_id: participant?.id,
-        instance_id: values["instance-id"],
-        text: summary,
-        error: summary,
-      }).catch(() => {});
+      await event(
+        reporter,
+        task.metadata,
+        role,
+        runnerStarted ? "session_runner_failed" : "session_startup_failed",
+        {
+          participant_id: participant?.id,
+          instance_id: values["instance-id"],
+          text: summary,
+          error: summary,
+        },
+      ).catch(() => {});
       await reporter.close().catch(() => {});
     }
     throw error;
