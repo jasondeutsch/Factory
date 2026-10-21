@@ -16,6 +16,33 @@ export interface DeliveryPort {
   call(name: string, args: RecordValue): Promise<RecordValue>;
   pages(name: string, key: string, args: RecordValue): Promise<RecordValue[]>;
 }
+export async function assignmentPermission(
+  port: DeliveryPort,
+  binding: Binding,
+  assignmentID?: string,
+) {
+  const task = await port.call("get_task", { task_id: binding.task_id });
+  if (["complete", "cancelled"].includes(task.status))
+    return { allowed: false, assignment_id: assignmentID, reason: "Task is terminal" };
+  const assignments = await port.pages("list_assignments", "assignments", {
+    task_id: binding.task_id,
+    assignee_id: binding.participant_id,
+  });
+  const active = assignments.filter((item) =>
+    ["offered", "accepted", "working"].includes(item.state),
+  );
+  if (!assignmentID && active.length === 1) assignmentID = active[0].id;
+  const current = assignments.find((item) => item.id === assignmentID);
+  if (current && active.some((item) => item.id === current.id))
+    return { allowed: true, assignment_id: assignmentID, reason: "" };
+  return {
+    allowed: false,
+    assignment_id: assignmentID,
+    reason: assignmentID
+      ? "The loop's assignment is no longer active; wait for coordinator reassignment"
+      : "No single active assignment is available; wait for coordinator dispatch",
+  };
+}
 // This adapter intentionally does not acknowledge a message just for displaying
 // its notification. The model must retrieve it through the read tool.
 export class InboxDelivery {
@@ -98,6 +125,7 @@ export default function deliveryExtension(pi: ExtensionAPI) {
     pendingTask: string | undefined;
   let polling = false,
     generation = 0;
+  let guardedAssignmentID: string | undefined;
   let bindingAttempt: Promise<Binding> | undefined;
   const status = (text: string) =>
     context?.ui.setStatus("factory-comms", `Comms: ${text}`);
@@ -248,6 +276,25 @@ export default function deliveryExtension(pi: ExtensionAPI) {
       context = ctx;
       await poll();
     },
+  });
+  pi.on("tool_call", async (tool) => {
+    if (process.env.FACTORY_ASSIGNMENT_GUARD !== "1") return;
+    if (["read", "grep", "find", "ls", "factory_read_message", "factory_bind_task"].includes(tool.toolName))
+      return;
+    if (!binding)
+      return { block: true, reason: "Bind the task before acting", terminate: true };
+    try {
+      const permission = await assignmentPermission(client, binding, guardedAssignmentID);
+      guardedAssignmentID = permission.assignment_id;
+      if (!permission.allowed)
+        return { block: true, reason: permission.reason, terminate: true };
+    } catch {
+      return {
+        block: true,
+        reason: "Cannot verify the canonical assignment; stop and reconnect to Comms",
+        terminate: true,
+      };
+    }
   });
   pi.on("session_start", async (_event, ctx) => {
     context = ctx;

@@ -121,6 +121,14 @@ export function prepare(
     FACTORY_ROLE: role,
     FACTORY_INSTANCE_ID: instance,
   };
+  if (
+    task?.metadata.workflow?.steps?.some(
+      (step: RecordValue) =>
+        step.type === "agent" && step.agent === role && step.loop,
+    )
+  )
+    env.FACTORY_ASSIGNMENT_GUARD = "1";
+  else delete env.FACTORY_ASSIGNMENT_GUARD;
   for (const name of [
     "FACTORY_TASK_ID",
     "FACTORY_TASK_DIR",
@@ -259,6 +267,7 @@ export function prepare(
     })),
     prepared_at: new Date().toISOString(),
     startup_checked: false,
+    assignment_guard: env.FACTORY_ASSIGNMENT_GUARD === "1",
   };
   manifest.configuration_fingerprint = hash(
     JSON.stringify({

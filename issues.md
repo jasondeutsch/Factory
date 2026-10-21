@@ -221,3 +221,9 @@ A Herdr pane launch writes a private marker only after its shell begins executin
 **Status:** Implemented
 
 Session startup and nonzero runner exits record a task failure event with the instance ID and a redacted, actionable summary. Dispatch reads matching failures while waiting for registration or native inbox contact and includes the summary in its receipt. This makes a failed credential or MCP check visible in the monitor and to the coordinator without copying private subprocess output or credentials into Comms. The worker pane and private `startup-checks.json` retain detailed diagnostics.
+
+## FACT-020 — Keep bounded loops within their assignment
+
+**Status:** Implemented
+
+For members attached to a workflow step with a loop, the Pi delivery adapter checks the current task and canonical assignment before allowing tools that can perform work. It binds to one assignment for the life of the process. When that assignment is submitted, cancelled, or blocked, it refuses subsequent work even if a new assignment appears for the same participant; the coordinator must explicitly start the next batch. Read-only inspection remains available. The Go coder's loop instructions also require stopping immediately after the review handoff. This is an execution guard for Pi tools, not a general filesystem sandbox or an enforcement layer for other runners.

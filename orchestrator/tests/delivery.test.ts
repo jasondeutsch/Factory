@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { fixture } from "./fixture.ts";
 import deliveryExtension, {
   InboxDelivery,
+  assignmentPermission,
   type Binding,
 } from "../extensions/delivery.ts";
 import { Comms, type RecordValue } from "../lib/client.ts";
@@ -156,4 +157,27 @@ test("extension exposes explicit read and exec tools without a terminal dependen
     ["factory_bind_task", "factory_read_message", "factory_exec_message"],
   );
   assert.deepEqual(commands, ["factory-inbox"]);
+});
+test("assignment guard stays bound to one assignment across review feedback", async () => {
+  const binding: Binding = {
+    task_id: "task",
+    participant_id: "coder",
+    instance_id: "instance",
+    recipient: "coder",
+  };
+  let taskStatus = "working";
+  const assignments: RecordValue[] = [];
+  const port = {
+    async call() { return { status: taskStatus }; },
+    async pages() { return assignments; },
+  };
+  assert.equal((await assignmentPermission(port, binding)).allowed, false);
+  assignments.push({ id: "first", state: "working" });
+  const started = await assignmentPermission(port, binding);
+  assert.deepEqual(started, { allowed: true, assignment_id: "first", reason: "" });
+  assignments[0].state = "completed";
+  assignments.push({ id: "review-repair", state: "offered" });
+  assert.equal((await assignmentPermission(port, binding, started.assignment_id)).allowed, false);
+  taskStatus = "cancelled";
+  assert.equal((await assignmentPermission(port, binding, started.assignment_id)).reason, "Task is terminal");
 });

@@ -9,6 +9,7 @@
 - Polls the bound participant's inbox every three seconds while the process is running. It queues a visible Pi follow-up when new messages arrive and Pi is idle.
 - Provides `factory_read_message` and `factory_exec_message` tools so message state advances only when the agent performs those explicit actions.
 - Reconnects after Comms errors and leaves messages in Comms for recovery.
+- For a workflow member with a bounded loop, checks the task and the process's original assignment before allowing action tools. A submitted, blocked, or cancelled assignment cannot silently turn into a new repair batch.
 
 The extension sends message IDs in a notification, not message contents. A notification does not count as reading, accepting an assignment, executing the requested work, or completing it.
 
@@ -43,6 +44,8 @@ Use `/factory-inbox` to request an immediate poll. The extension also checks aft
 ## Recovery and limits
 
 The extension cannot wake a stopped Pi process, interrupt an active turn, or guarantee exactly-once message execution. Notifications are deduplicated only within the current process, so a restart may show an already-seen hint again. Comms message and assignment IDs are the durable record; reconcile them before repeating work. If the Comms service is unavailable, messages remain stored and the Pi status shows that it is retrying.
+
+The assignment guard blocks Pi tool calls that could perform work after the bound assignment ends; it still allows built-in read-only inspection and the task-binding/read-message tools. It does not sandbox other processes or prevent a text-only model response. Other runners need their own equivalent guard.
 
 Contact is a short-lived observation, not evidence that the agent is making progress. `read` and `exec` are agent declarations, not proof of comprehension or correct work. Acknowledgement can succeed even if its response is lost, so after an uncertain tool call inspect the inbox state before trying again.
 
